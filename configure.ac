@@ -49,6 +49,9 @@ AS_IF([test x"$PULSE_DIR" == x""],
     AC_MSG_ERROR([m4_text_box([PULSE_MSG])])
     )
 
+# change default prefix so modules will be installed where system pulseaudio is
+AC_PREFIX_DEFAULT(["/usr"])
+
 # copied from pulseaudio
 AC_ARG_WITH(
     [module-dir],
