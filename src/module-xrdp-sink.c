@@ -21,6 +21,7 @@
  * see pulse-notes.txt
 */
 
+// config.h from pulseaudio sources
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -58,6 +59,9 @@
 #include <pulsecore/thread-mq.h>
 #include <pulsecore/rtpoll.h>
 
+#include <xrdp_sockets.h>
+
+
 /* defined in pulse/version.h */
 #if PA_PROTOCOL_VERSION > 28
 /* these used to be defined in pulsecore/macro.h */
@@ -68,7 +72,7 @@ typedef bool pa_bool_t;
 #endif
 
 #include "module-xrdp-sink-symdef.h"
-#include "../../../common/xrdp_sockets.h"
+
 
 PA_MODULE_AUTHOR("Jay Sorg");
 PA_MODULE_DESCRIPTION("xrdp sink");
