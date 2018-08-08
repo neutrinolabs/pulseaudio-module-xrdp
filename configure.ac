@@ -47,6 +47,7 @@ AC_PROG_MAKE_SET
 # Checks for libraries.
 PKG_CHECK_MODULES([XRDP], [xrdp >= 0.9.0])
 AC_SUBST(XRDP_CFLAGS)
+PKG_CHECK_MODULES([LIBPULSE], [libpulse])
 
 m4_define([PULSE_MSG], [PULSE_DIR not specified. Follow the instructions in README.md.])
 
