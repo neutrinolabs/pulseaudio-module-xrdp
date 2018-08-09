@@ -13,11 +13,20 @@ AM_PROG_AR
 AM_INIT_AUTOMAKE([-Wall foreign silent-rules])
 AM_SILENT_RULES([yes])
 
+PKG_PROG_PKG_CONFIG
+if test "x$PKG_CONFIG" = "x"; then
+  AC_MSG_ERROR([pkg-config not found])
+fi
+
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 # get system's pulseaudio version
-m4_define([pa_major], [`echo $(pulseaudio --version) | cut -d' ' -f2 | cut -d. -f1`])
-m4_define([pa_minor], [`echo $(pulseaudio --version) | cut -d' ' -f2 | cut -d. -f2`])
+m4_define([pa_major], [`$PKG_CONFIG --modversion libpulse | cut -d. -f1`])
+m4_define([pa_minor], [`$PKG_CONFIG --modversion libpulse | cut -d. -f2`])
+# pulseaudio module/lib directory
+PA_LIBDIR=`$PKG_CONFIG --variable=libdir libpulse`
+PA_MODDIR=`$PKG_CONFIG --variable=modlibexecdir libpulse`
+PA_PREFIX=`$PKG_CONFIG --variable=prefix libpulse`
 
 AC_SUBST([PA_MAJOR], [pa_major])
 AC_SUBST([PA_MINOR], [pa_minor])
@@ -38,26 +47,27 @@ AC_PROG_MAKE_SET
 # Checks for libraries.
 PKG_CHECK_MODULES([XRDP], [xrdp >= 0.9.0])
 AC_SUBST(XRDP_CFLAGS)
+PKG_CHECK_MODULES([LIBPULSE], [libpulse])
 
-m4_define([PULSE_MSG], [pulseaudio source code directory not specified.
-    please download the required sources from:
-    https://freedesktop.org/software/pulseaudio/releases/
-    and run ./configure PULSE_DIR=<path to sources>])
+m4_define([PULSE_MSG], [PULSE_DIR not specified. Follow the instructions in README.md.])
 
 AC_ARG_VAR([PULSE_DIR], [pulseaudio source code directory])
 AS_IF([test x"$PULSE_DIR" == x""],
-    AC_MSG_ERROR([m4_text_box([PULSE_MSG])])
-    )
+cat <<__MSG__
+m4_text_box([PULSE_MSG])
+__MSG__
+AC_MSG_ERROR([PULSE_DIR not specified])
+)
 
-# change default prefix so modules will be installed where system pulseaudio is
-AC_PREFIX_DEFAULT(["/usr"])
+# use the prefix as same as pulseaudio
+AC_PREFIX_PROGRAM(pulseaudio)
 
 # copied from pulseaudio
 AC_ARG_WITH(
     [module-dir],
     [AS_HELP_STRING([--with-module-dir],
-    	[Directory where to install the modules to (defaults to ${libdir}/pulse-${PA_MAJORMINOR}/modules)])],
-    [modlibexecdir=$withval], [modlibexecdir="${libdir}/pulse-${PA_MAJORMINOR}/modules"])
+        [Directory where to install the modules to (defaults to `pkg-config --variable=modlibexecdir libpulse`)])],
+    [modlibexecdir=$withval], [modlibexecdir="${PA_MODDIR}"])
 AC_SUBST(modlibexecdir)
 
 # Checks for header files.
