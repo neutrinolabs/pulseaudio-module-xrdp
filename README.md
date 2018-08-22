@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp.svg?branch=travis)](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp)
+[![Build Status](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp.svg?branch=devel)](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp)
 
 The latest version of this document can be found at wiki.
 
