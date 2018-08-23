@@ -1,5 +1,5 @@
-module-config.h
-module-config.h.in
+config_ac.h
+config_ac.h.in
 build-aux/*
 .deps/
 .libs/
