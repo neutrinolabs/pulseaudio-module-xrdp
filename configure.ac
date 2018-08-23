@@ -3,8 +3,8 @@
 
 AC_PREREQ([2.65])
 AC_INIT([pulseaudio-module-xrdp], [0.1], [xrdp-devel@googlegroups.com])
-# specify module-config.h so we don't collide with pulseaudio's config.h
-AC_CONFIG_HEADERS([module-config.h])
+# specify config_ac.h so we don't collide with pulseaudio's config.h
+AC_CONFIG_HEADERS([config_ac.h])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIRS([m4])
