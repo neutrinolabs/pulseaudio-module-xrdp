@@ -4,7 +4,7 @@ SRC_DIR=${PWD}
 
 cd /tmp
 yum install -y epel-release
-yum install -y xrdp xrdp-devel xrdp-selinux wget sudo
+yum install -y wget sudo
 yum install -y pulseaudio pulseaudio-libs pulseaudio-libs-devel
 yum install -y rpmdevtools yum-utils
 yum-builddep -y pulseaudio
