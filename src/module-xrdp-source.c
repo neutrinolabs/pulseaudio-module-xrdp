@@ -197,9 +197,14 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         if (source_socket == NULL || source_socket[0] == '\0')
         {
 
-           /* usually it doesn't reach here. if the socket name is not given
-              via environment variable, use hardcoded name as fallback */
-           snprintf(source_socket, bytes, "xrdp_chansrv_audio_in_socket_%d", u->display_num);
+            pa_log("Could not obtain source_socket from environment.");
+            /* usually it doesn't reach here. if the socket name is not given
+               via environment variable, use hardcoded name as fallback */
+            snprintf(source_socket, bytes, "xrdp_chansrv_audio_in_socket_%d", u->display_num);
+        }
+        else
+        {
+            pa_log("Obtained sink_socket from environment.");
         }
         snprintf(s.sun_path, bytes, "%s/%s", socket_dir, source_socket);
         pa_log_debug("Trying to connect to %s", s.sun_path);
