@@ -193,7 +193,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         {
             socket_dir = "/tmp/.xrdp";
         }
-        source_socket = getenv("CHANSRV_PULSE_SINK_SOCKET");
+        source_socket = getenv("XRDP_PULSE_SINK_SOCKET");
         if (source_socket == NULL || source_socket[0] == '\0')
         {
 

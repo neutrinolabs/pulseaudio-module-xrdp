@@ -316,7 +316,7 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
         {
             socket_dir = "/tmp/.xrdp";
         }
-        sink_socket = getenv("CHANSRV_PULSE_SINK_SOCKET");
+        sink_socket = getenv("XRDP_PULSE_SINK_SOCKET");
         if (sink_socket == NULL || sink_socket[0] == '\0')
         {
             pa_log("Could not obtain sink_socket from environment.");
