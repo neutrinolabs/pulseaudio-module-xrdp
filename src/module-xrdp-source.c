@@ -46,9 +46,6 @@
 #include <pulsecore/thread-mq.h>
 #include <pulsecore/thread.h>
 
-#include <xrdp_sockets.h>
-
-
 /* defined in pulse/version.h */
 #if PA_PROTOCOL_VERSION > 28
 /* these used to be defined in pulsecore/macro.h */
@@ -181,6 +178,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
     struct sockaddr_un s;
     char *data;
     char *socket_dir;
+    char *source_socket;
     char buf[11];
     unsigned char ubuf[10];
 
@@ -195,8 +193,20 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         {
             socket_dir = "/tmp/.xrdp";
         }
-        snprintf(s.sun_path, bytes, "%s/" CHANSRV_PORT_IN_BASE_STR,
-                 socket_dir, u->display_num);
+        source_socket = getenv("XRDP_PULSE_SINK_SOCKET");
+        if (source_socket == NULL || source_socket[0] == '\0')
+        {
+
+            pa_log("Could not obtain source_socket from environment.");
+            /* usually it doesn't reach here. if the socket name is not given
+               via environment variable, use hardcoded name as fallback */
+            snprintf(source_socket, bytes, "xrdp_chansrv_audio_in_socket_%d", u->display_num);
+        }
+        else
+        {
+            pa_log("Obtained sink_socket from environment.");
+        }
+        snprintf(s.sun_path, bytes, "%s/%s", socket_dir, source_socket);
         pa_log_debug("Trying to connect to %s", s.sun_path);
 
         if (connect(fd, (struct sockaddr *) &s, sizeof(struct sockaddr_un)) != 0) {

@@ -6,7 +6,7 @@ cd /tmp
 sed -i.bak -e 's|^# deb-src|deb-src|' /etc/apt/sources.list
 
 apt update
-apt install -y build-essential dpkg-dev libpulse-dev pulseaudio pkg-config xrdp
+apt install -y build-essential dpkg-dev libpulse-dev pulseaudio pkg-config
 apt install -y g++ clang
 
 apt install -y pulseaudio

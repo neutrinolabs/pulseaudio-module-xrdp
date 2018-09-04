@@ -59,9 +59,6 @@
 #include <pulsecore/thread-mq.h>
 #include <pulsecore/rtpoll.h>
 
-#include <xrdp_sockets.h>
-
-
 /* defined in pulse/version.h */
 #if PA_PROTOCOL_VERSION > 28
 /* these used to be defined in pulsecore/macro.h */
@@ -297,6 +294,7 @@ static int lsend(int fd, char *data, int bytes) {
 static int data_send(struct userdata *u, pa_memchunk *chunk) {
     char *data;
     char *socket_dir;
+    char *sink_socket;
     int bytes;
     int sent;
     int fd;
@@ -318,9 +316,21 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
         {
             socket_dir = "/tmp/.xrdp";
         }
-        snprintf(s.sun_path, bytes, "%s/" CHANSRV_PORT_OUT_BASE_STR,
-                 socket_dir, u->display_num);
+        sink_socket = getenv("XRDP_PULSE_SINK_SOCKET");
+        if (sink_socket == NULL || sink_socket[0] == '\0')
+        {
+            pa_log_debug("Could not obtain sink_socket from environment.");
+            /* usually it doesn't reach here. if the socket name is not given
+               via environment variable, use hardcoded name as fallback */
+            snprintf(sink_socket, bytes, "xrdp_chansrv_audio_out_socket_%d", u->display_num);
+        }
+        else
+        {
+            pa_log_debug("Obtained sink_socket from environment.");
+        }
+        snprintf(s.sun_path, bytes, "%s/%s", socket_dir, sink_socket);
         pa_log_debug("trying to connect to %s", s.sun_path);
+
         if (connect(fd, (struct sockaddr *)&s,
                     sizeof(struct sockaddr_un)) != 0) {
             u->failed_connect_time = pa_rtclock_now();
