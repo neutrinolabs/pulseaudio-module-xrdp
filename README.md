@@ -73,6 +73,42 @@ Finally, let's build xrdp source / sink modules. You'll have two .so files
     ./bootstrap && ./configure PULSE_DIR=/path/to/pulseaudio-11.1
     make
 
+## CentOS 7.x (7.5 or later requires this build procedure)
+
+### Prerequisites
+
+Some build tools and package development tools are required. Make sure install
+the tools.
+
+    yum groupinstall "Development Tools"
+    yum install rpmdevtools yum-utils
+    rpmdev-setuptree
+
+### Prepare & build
+
+Install pulseaudio and requisite packages to build pulseaudio.
+
+    yum install pulseaudio pulseaudio-libs pulseaudio-libs-devel
+    yum-builddep pulseaudio
+
+Fetch the pulseaudio source and extract. You'll see `~/rpmbuild/BUILD/
+
+    yumdownloader --source pulseaudio
+    rpm --install pulseaudio*.src.rpm
+
+Build the pulseaudio source. In this phase, pulseaudio is not necessarily needed to be built but
+configured however there's no way to do only configure.
+
+    rpmbuild -bb --noclean ~/rpmbuild/SPECS/pulseaudio.spec
+
+Finally, let's build xrdp source / sink modules. You'll have two .so files
+`module-xrdp-sink.so` and `module-xrdp-source.so`.
+
+    git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
+    cd pulseaudio-module-xrdp
+    ./bootstrap && ./configure PULSE_DIR=~/rpmbuild/BUILD/pulseaudio-10.0
+    make
+
 ## Other distro
 
 First off, find out your pulseaudio version using `pulseaudio --version`
@@ -111,6 +147,9 @@ ls $(pkg-config --variable=modlibexecdir libpulse)
 If you can see lots of `module-*.so` and `module-xrdp-sink.so`,
 `module-xrdp-source.so`, PulseAudio modules should be properly built and
 installed.
+
+`module-xrdp-sink.la` and `module-xrdp-source.so` may be installed to the
+target directory, these files are not necessary and you can remove them safely.
 
 Enjoy!
 
