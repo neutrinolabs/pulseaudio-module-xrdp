@@ -193,11 +193,11 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         {
             socket_dir = "/tmp/.xrdp";
         }
-        source_socket = getenv("XRDP_PULSE_SINK_SOCKET");
+        source_socket = getenv("XRDP_PULSE_SOURCE_SOCKET");
         if (source_socket == NULL || source_socket[0] == '\0')
         {
 
-            pa_log("Could not obtain source_socket from environment.");
+            pa_log_debug("Could not obtain source_socket from environment.");
             /* usually it doesn't reach here. if the socket name is not given
                via environment variable, use hardcoded name as fallback */
             snprintf(s.sun_path, bytes,
@@ -205,7 +205,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         }
         else
         {
-            pa_log("Obtained sink_socket from environment.");
+            pa_log_debug("Obtained source_socket from environment.");
             snprintf(s.sun_path, bytes, "%s/%s", socket_dir, source_socket);
         }
         pa_log_debug("Trying to connect to %s", s.sun_path);
