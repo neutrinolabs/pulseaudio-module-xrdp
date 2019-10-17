@@ -182,7 +182,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
     char buf[11];
     unsigned char ubuf[10];
 
-    if (u->fd == 0) {
+    if (u->fd == -1) {
         /* connect to xrdp unix domain socket */
         fd = socket(PF_LOCAL, SOCK_STREAM, 0);
         memset(&s, 0, sizeof(s));
@@ -221,8 +221,6 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         u->fd = fd;
     }
 
-    data = (char *) pa_memblock_acquire(chunk->memblock);
-
     if (!u->want_src_data) {
         char buf[12];
 
@@ -240,8 +238,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
 
         if (lsend(u->fd, buf, 11) != 11) {
             close(u->fd);
-            u->fd = 0;
-            pa_memblock_release(chunk->memblock);
+            u->fd = -1;
             return -1;
         }
         u->want_src_data = 1;
@@ -263,8 +260,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
 
     if (lsend(u->fd, buf, 11) != 11) {
         close(u->fd);
-        u->fd = 0;
-        pa_memblock_release(chunk->memblock);
+        u->fd = -1;
         u->want_src_data = 0;
         return -1;
     }
@@ -272,15 +268,23 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
     /* read length of data available */
     if (lrecv(u->fd, (char *) ubuf, 2) != 2) {
         close(u->fd);
-        u->fd = 0;
-        pa_memblock_release(chunk->memblock);
+        u->fd = -1;
         u->want_src_data = 0;
         return -1;
     }
     bytes = ((ubuf[1] << 8) & 0xff00) | (ubuf[0] & 0xff);
 
     if (bytes == 0) {
-        pa_memblock_release(chunk->memblock);
+        return 0;
+    }
+
+    chunk->memblock = pa_memblock_new(u->core->mempool, bytes);
+    if (chunk->memblock == NULL) {
+        return 0;
+    }
+
+    data = (char *) pa_memblock_acquire(chunk->memblock);
+    if (data == NULL) {
         return 0;
     }
 
@@ -288,11 +292,12 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
     read_bytes = lrecv(u->fd, data, bytes);
     if (read_bytes != bytes) {
         close(u->fd);
-        u->fd = 0;
+        u->fd = -1;
         pa_memblock_release(chunk->memblock);
         u->want_src_data = 0;
         return -1;
     }
+
     pa_memblock_release(chunk->memblock);
 
     return read_bytes;
@@ -309,28 +314,26 @@ static void thread_func(void *userdata) {
     for (;;) {
         int ret;
 
-        /* Generate some null data */
         if (u->source->thread_info.state == PA_SOURCE_RUNNING) {
             pa_usec_t now;
             pa_memchunk chunk;
 
             now = pa_rtclock_now();
 
+            memset(&chunk, 0, sizeof(chunk));
             if ((chunk.length = pa_usec_to_bytes(now - u->timestamp, &u->source->sample_spec)) > 0) {
                 chunk.length *= 4;
-                chunk.memblock = pa_memblock_new(u->core->mempool, chunk.length);
-                chunk.index = 0;
                 bytes = data_get(u, &chunk);
-                if (bytes > 0)
-                {
+                if (bytes > 0) {
                     chunk.length = bytes;
-                    pa_source_post(u->source, &chunk); 
+                    pa_source_post(u->source, &chunk);
+                    u->timestamp = now;
                 }
-                pa_memblock_unref(chunk.memblock);
-                u->timestamp = now;
+                if (chunk.memblock) {
+                    pa_memblock_unref(chunk.memblock);
+                }
             }
-
-            pa_rtpoll_set_timer_absolute(u->rtpoll, u->timestamp + u->latency_time * PA_USEC_PER_MSEC);
+            pa_rtpoll_set_timer_absolute(u->rtpoll, now + u->latency_time * PA_USEC_PER_MSEC);
         } else {
             if (u->want_src_data)
             {
@@ -351,7 +354,7 @@ static void thread_func(void *userdata) {
 
                 if (lsend(u->fd, buf, 11) != 11) {
                     close(u->fd);
-                    u->fd = 0;
+                    u->fd = -1;
                 }
                 u->want_src_data = 0;
                 pa_log_debug("###### stopped recording");
@@ -454,15 +457,17 @@ int pa__init(pa_module *m) {
     u->source->thread_info.max_rewind =
         pa_usec_to_bytes(u->block_usec, &u->source->sample_spec);
 
-    #if defined(PA_CHECK_VERSION)
-    #if PA_CHECK_VERSION(0, 9, 22)
-        if (!(u->thread = pa_thread_new("xrdp-source", thread_func, u))) {
-    #else
-        if (!(u->thread = pa_thread_new(thread_func, u))) {
-    #endif
-    #else
-	if (!(u->thread = pa_thread_new(thread_func, u))) 
-    #endif
+    u->fd = -1;
+
+#if defined(PA_CHECK_VERSION)
+#if PA_CHECK_VERSION(0, 9, 22)
+    if (!(u->thread = pa_thread_new("xrdp-source", thread_func, u))) {
+#else
+    if (!(u->thread = pa_thread_new(thread_func, u))) {
+#endif
+#else
+    if (!(u->thread = pa_thread_new(thread_func, u))) {
+#endif
         pa_log("Failed to create thread.");
         goto fail;
     }
