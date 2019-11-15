@@ -37,9 +37,7 @@ or
 
 # How to build
 
-## Debian 9 / Ubuntu
-
-This instruction also should be applicable to the Ubuntu family.
+## Debian 9
 
 ### Prerequisites
 
@@ -72,6 +70,42 @@ Finally, let's build xrdp source / sink modules. You'll have two .so files
     cd pulseaudio-module-xrdp
     ./bootstrap && ./configure PULSE_DIR=/path/to/pulseaudio-11.1
     make
+
+## Ubuntu 18.04 family
+
+### Prerequisites
+
+Some build tools and package development tools are required. Make sure install
+the tools.
+    sudo -s
+    apt install build-essential dpkg-dev xrdp-pulseaudio-installer
+
+### Prepare & build
+
+Install pulseaudio and requisite packages to build pulseaudio.
+
+    apt install pulseaudio
+    apt build-dep pulseaudio
+
+Fetch the pulseaudio source. You'll see `pulseaudio-11.1` directory in your
+current directory.
+
+    apt source pulseaudio
+
+Enter into the directory and build the pulseaudio package.
+
+    cd pulseaudio-11.1
+    ./configure
+    apt install libpulse-dev
+
+Finally, let's build xrdp source / sink modules. You'll have two .so files
+`module-xrdp-sink.so` and `module-xrdp-source.so`.
+
+    git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
+    cd pulseaudio-module-xrdp
+    ./bootstrap && ./configure PULSE_DIR=/path/to/pulseaudio-11.1
+    make
+
 
 ## CentOS 7.x (7.5 or later requires this build procedure)
 
@@ -137,6 +171,24 @@ Finally, let's build xrdp source / sink modules. You'll have two .so files
 
 # Install
 
+## Ubuntu 18.04 family
+
+```
+make install
+cd $(pkg-config --variable=modlibexecdir libpulse)
+chmod 644 module-xrdp-s*
+cp -a module-xrdp-s* /var/lib/xrdp-pulseaudio-installer/
+reboot
+```
+
+`module-xrdp-sink.la` and `module-xrdp-source.la` may be installed to the
+target directory, these files are not necessary and you can remove them safely.
+
+Enjoy!
+
+
+## Other distro
+
 Just `make install` should install built modules to the correct directory.
 
 You can confirm if the modules properly installed by following command:
@@ -148,7 +200,7 @@ If you can see lots of `module-*.so` and `module-xrdp-sink.so`,
 `module-xrdp-source.so`, PulseAudio modules should be properly built and
 installed.
 
-`module-xrdp-sink.la` and `module-xrdp-source.so` may be installed to the
+`module-xrdp-sink.la` and `module-xrdp-source.la` may be installed to the
 target directory, these files are not necessary and you can remove them safely.
 
 Enjoy!
