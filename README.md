@@ -77,8 +77,10 @@ Finally, let's build xrdp source / sink modules. You'll have two .so files
 
 Some build tools and package development tools are required. Make sure install
 the tools.
+i```
     sudo -s
     apt install build-essential dpkg-dev xrdp-pulseaudio-installer
+```
 
 ### Prepare & build
 
