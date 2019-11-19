@@ -256,7 +256,7 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
     struct header h;
     struct sockaddr_un s;
 
-    if (u->fd == 0) {
+    if (u->fd == -1) {
         if (u->failed_connect_time != 0) {
             if (pa_rtclock_now() - u->failed_connect_time < 1000000) {
                 return 0;
@@ -307,7 +307,7 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
     if (lsend(u->fd, (char*)(&h), 8) != 8) {
         pa_log("data_send: send failed");
         close(u->fd);
-        u->fd = 0;
+        u->fd = -1;
         return 0;
     } else {
         pa_log_debug("data_send: sent header ok bytes %d", bytes);
@@ -321,7 +321,7 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
     if (sent != bytes) {
         pa_log("data_send: send failed sent %d bytes %d", sent, bytes);
         close(u->fd);
-        u->fd = 0;
+        u->fd = -1;
         return 0;
     }
 
@@ -332,7 +332,7 @@ static int close_send(struct userdata *u) {
     struct header h;
 
     pa_log("close_send:");
-    if (u->fd == 0) {
+    if (u->fd == -1) {
         return 0;
     }
     h.code = 1;
@@ -340,7 +340,7 @@ static int close_send(struct userdata *u) {
     if (lsend(u->fd, (char*)(&h), 8) != 8) {
         pa_log("close_send: send failed");
         close(u->fd);
-        u->fd = 0;
+        u->fd = -1;
         return 0;
     } else {
         pa_log_debug("close_send: sent header ok");
@@ -496,6 +496,8 @@ int pa__init(pa_module*m) {
     pa_sink_set_max_request(u->sink, nbytes);
 
     u->display_num = get_display_num_from_display(getenv("DISPLAY"));
+
+    u->fd = -1;
 
 #if defined(PA_CHECK_VERSION)
 #if PA_CHECK_VERSION(0, 9, 22)
