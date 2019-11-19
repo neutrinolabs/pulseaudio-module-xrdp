@@ -170,58 +170,13 @@ static void sink_update_requested_latency_cb(pa_sink *s) {
     pa_sink_assert_ref(s);
     pa_assert_se(u = s->userdata);
 
-    u->block_usec = BLOCK_USEC;
-    //u->block_usec = pa_sink_get_requested_latency_within_thread(s);
-    pa_log("1 block_usec %llu", (unsigned long long) u->block_usec);
+    u->block_usec = pa_sink_get_requested_latency_within_thread(s);
 
-    u->got_max_latency = 0;
     if (u->block_usec == (pa_usec_t) -1) {
         u->block_usec = s->thread_info.max_latency;
-        pa_log_debug("2 block_usec %llu", (unsigned long long) u->block_usec);
-        u->got_max_latency = 1;
     }
-
     nbytes = pa_usec_to_bytes(u->block_usec, &s->sample_spec);
-    pa_sink_set_max_rewind_within_thread(s, nbytes);
     pa_sink_set_max_request_within_thread(s, nbytes);
-}
-
-static void process_rewind(struct userdata *u, pa_usec_t now) {
-    size_t rewind_nbytes, in_buffer;
-    pa_usec_t delay;
-
-    pa_assert(u);
-
-    /* Figure out how much we shall rewind and reset the counter */
-    rewind_nbytes = u->sink->thread_info.rewind_nbytes;
-    u->sink->thread_info.rewind_nbytes = 0;
-
-    pa_assert(rewind_nbytes > 0);
-    pa_log_debug("Requested to rewind %lu bytes.",
-                 (unsigned long) rewind_nbytes);
-
-    if (u->timestamp <= now)
-        goto do_nothing;
-
-    delay = u->timestamp - now;
-    in_buffer = pa_usec_to_bytes(delay, &u->sink->sample_spec);
-
-    if (in_buffer <= 0)
-        goto do_nothing;
-
-    if (rewind_nbytes > in_buffer)
-        rewind_nbytes = in_buffer;
-
-    pa_sink_process_rewind(u->sink, rewind_nbytes);
-    u->timestamp -= pa_bytes_to_usec(rewind_nbytes, &u->sink->sample_spec);
-    u->skip_bytes += rewind_nbytes;
-
-    pa_log_debug("Rewound %lu bytes.", (unsigned long) rewind_nbytes);
-    return;
-
-do_nothing:
-
-    pa_sink_process_rewind(u->sink, 0);
 }
 
 struct header {
@@ -347,17 +302,6 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
     bytes = chunk->length;
     pa_log_debug("bytes %d", bytes);
 
-    /* from rewind */
-    if (u->skip_bytes > 0) {
-        if (bytes > u->skip_bytes) {
-            bytes -= u->skip_bytes;
-            u->skip_bytes = 0;
-        } else  {
-            u->skip_bytes -= bytes;
-            return bytes;
-        }
-    }
-
     h.code = 0;
     h.bytes = bytes + 8;
     if (lsend(u->fd, (char*)(&h), 8) != 8) {
@@ -417,7 +361,9 @@ static void process_render(struct userdata *u, pa_usec_t now) {
         request_bytes = u->sink->thread_info.max_request;
         request_bytes = MIN(request_bytes, 16 * 1024);
         pa_sink_render(u->sink, request_bytes, &chunk);
-        data_send(u, &chunk);
+        if (u->sink->thread_info.state == PA_SINK_RUNNING) {
+            data_send(u, &chunk);
+        }
         pa_memblock_unref(chunk.memblock);
         u->timestamp += pa_bytes_to_usec(chunk.length, &u->sink->sample_spec);
     }
@@ -438,30 +384,26 @@ static void thread_func(void *userdata) {
     u->timestamp = pa_rtclock_now();
 
     for (;;) {
+        pa_usec_t now = 0;
+        int ret;
 
-        if (u->sink->thread_info.state == PA_SINK_RUNNING) {
-
+        if (PA_SINK_IS_OPENED(u->sink->thread_info.state)) {
             now = pa_rtclock_now();
-
-            if (u->sink->thread_info.rewind_requested) {
-                if (u->sink->thread_info.rewind_nbytes > 0) {
-                    process_rewind(u, now);
-                } else {
-                    pa_sink_process_rewind(u->sink, 0);
-                }
-            }
-
+        }
+        if (PA_UNLIKELY(u->sink->thread_info.rewind_requested)) {
+            pa_sink_process_rewind(u->sink, 0);
+        }
+        /* Render some data and write it to the socket */
+        if (PA_SINK_IS_OPENED(u->sink->thread_info.state)) {
             if (u->timestamp <= now) {
-                pa_log_debug("thread_func: calling process_render");
                 process_render(u, now);
             }
-
             pa_rtpoll_set_timer_absolute(u->rtpoll, u->timestamp);
-
         } else {
             pa_rtpoll_set_timer_disabled(u->rtpoll);
         }
 
+        /* Hmm, nothing to do. Let's sleep */
 #if defined(PA_CHECK_VERSION) && PA_CHECK_VERSION(6, 0, 0)
         if ((ret = pa_rtpoll_run(u->rtpoll)) < 0) {
 #else
@@ -474,7 +416,6 @@ static void thread_func(void *userdata) {
             goto finish;
         }
     }
-
 fail:
     /* If this was no regular exit from the loop we have to continue
      * processing messages until we received PA_MESSAGE_SHUTDOWN */
@@ -552,7 +493,6 @@ int pa__init(pa_module*m) {
     u->block_usec = BLOCK_USEC;
     pa_log_debug("3 block_usec %llu", (unsigned long long) u->block_usec);
     nbytes = pa_usec_to_bytes(u->block_usec, &u->sink->sample_spec);
-    pa_sink_set_max_rewind(u->sink, nbytes);
     pa_sink_set_max_request(u->sink, nbytes);
 
     u->display_num = get_display_num_from_display(getenv("DISPLAY"));
