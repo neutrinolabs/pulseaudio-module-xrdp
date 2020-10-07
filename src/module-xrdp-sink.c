@@ -81,7 +81,9 @@ PA_MODULE_USAGE(
         "format=<sample format> "
         "rate=<sample rate> "
         "channels=<number of channels> "
-        "channel_map=<channel map>");
+        "channel_map=<channel map> "
+        "xrdp_socket_path=<path to XRDP sockets> "
+        "xrdp_pulse_sink_socket=<name of sink socket>");
 
 #define DEFAULT_SINK_NAME "xrdp-sink"
 #define BLOCK_USEC 30000
@@ -102,10 +104,9 @@ struct userdata {
     pa_usec_t last_send_time;
 
     int fd; /* unix domain socket connection to xrdp chansrv */
-    int display_num;
     int skip_bytes;
-    int got_max_latency;
 
+    char *sink_socket;
 };
 
 static const char* const valid_modargs[] = {
@@ -115,6 +116,8 @@ static const char* const valid_modargs[] = {
     "rate",
     "channels",
     "channel_map",
+    "xrdp_socket_path",
+    "xrdp_pulse_sink_socket",
     NULL
 };
 
@@ -127,27 +130,30 @@ static int sink_process_msg(pa_msgobject *o, int code, void *data,
     pa_usec_t now;
     long lat;
 
-    pa_log_debug("sink_process_msg: code %d", code);
-
     switch (code) {
 
-        case PA_SINK_MESSAGE_SET_VOLUME: /* 3 */
+        case PA_SINK_MESSAGE_SET_VOLUME:
+            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_SET_VOLUME");
             break;
 
-        case PA_SINK_MESSAGE_SET_MUTE: /* 6 */
+        case PA_SINK_MESSAGE_SET_MUTE:
+            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_SET_MUTE");
             break;
 
-        case PA_SINK_MESSAGE_GET_LATENCY: /* 7 */
+        case PA_SINK_MESSAGE_GET_LATENCY:
+            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_GET_LATENCY");
             now = pa_rtclock_now();
             lat = u->timestamp > now ? u->timestamp - now : 0ULL;
             pa_log_debug("sink_process_msg: lat %ld", lat);
             *((pa_usec_t*) data) = lat;
             return 0;
 
-        case PA_SINK_MESSAGE_GET_REQUESTED_LATENCY: /* 8 */
+        case PA_SINK_MESSAGE_GET_REQUESTED_LATENCY:
+            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_GET_REQUESTED_LATENCY");
             break;
 
-        case PA_SINK_MESSAGE_SET_STATE: /* 9 */
+        case PA_SINK_MESSAGE_SET_STATE:
+            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_SET_STATE");
             if (PA_PTR_TO_UINT(data) == PA_SINK_RUNNING) /* 0 */ {
                 pa_log("sink_process_msg: running");
 
@@ -157,6 +163,9 @@ static int sink_process_msg(pa_msgobject *o, int code, void *data,
                 close_send(u);
             }
             break;
+
+        default:
+            pa_log_debug("sink_process_msg: code %d", code);
 
     }
 
@@ -184,7 +193,7 @@ struct header {
     int bytes;
 };
 
-static int get_display_num_from_display(char *display_text) {
+static int get_display_num_from_display(const char *display_text) {
     int index;
     int mode;
     int host_index;
@@ -248,8 +257,6 @@ static int lsend(int fd, char *data, int bytes) {
 
 static int data_send(struct userdata *u, pa_memchunk *chunk) {
     char *data;
-    char *socket_dir;
-    char *sink_socket;
     int bytes;
     int sent;
     int fd;
@@ -265,26 +272,7 @@ static int data_send(struct userdata *u, pa_memchunk *chunk) {
         fd = socket(PF_LOCAL, SOCK_STREAM, 0);
         memset(&s, 0, sizeof(s));
         s.sun_family = AF_UNIX;
-        bytes = sizeof(s.sun_path) - 1;
-        socket_dir = getenv("XRDP_SOCKET_PATH");
-        if (socket_dir == NULL || socket_dir[0] == '\0')
-        {
-            socket_dir = "/tmp/.xrdp";
-        }
-        sink_socket = getenv("XRDP_PULSE_SINK_SOCKET");
-        if (sink_socket == NULL || sink_socket[0] == '\0')
-        {
-            pa_log_debug("Could not obtain sink_socket from environment.");
-            /* usually it doesn't reach here. if the socket name is not given
-               via environment variable, use hardcoded name as fallback */
-            snprintf(s.sun_path, bytes,
-                    "%s/xrdp_chansrv_audio_out_socket_%d", socket_dir, u->display_num);
-        }
-        else
-        {
-            pa_log_debug("Obtained sink_socket from environment.");
-            snprintf(s.sun_path, bytes, "%s/%s", socket_dir, sink_socket);
-        }
+        pa_strlcpy(s.sun_path, u->sink_socket, sizeof(s.sun_path));
         pa_log_debug("trying to connect to %s", s.sun_path);
 
         if (connect(fd, (struct sockaddr *)&s,
@@ -353,9 +341,6 @@ static void process_render(struct userdata *u, pa_usec_t now) {
     int request_bytes;
 
     pa_assert(u);
-    if (u->got_max_latency) {
-        return;
-    }
     pa_log_debug("process_render: u->block_usec %llu", (unsigned long long) u->block_usec);
     while (u->timestamp < now + u->block_usec) {
         request_bytes = u->sink->thread_info.max_request;
@@ -372,8 +357,6 @@ static void process_render(struct userdata *u, pa_usec_t now) {
 static void thread_func(void *userdata) {
 
     struct userdata *u = userdata;
-    int ret;
-    pa_usec_t now;
 
     pa_assert(u);
 
@@ -426,6 +409,35 @@ fail:
 
 finish:
     pa_log_debug("Thread shutting down");
+}
+
+static void set_sink_socket(pa_modargs *ma, struct userdata *u) {
+    const char *socket_dir;
+    const char *socket_name;
+    char default_socket_name[64];
+    size_t nbytes;
+
+    socket_dir = pa_modargs_get_value(ma, "xrdp_socket_path",
+                                      getenv("XRDP_SOCKET_PATH"));
+    if (socket_dir == NULL || socket_dir[0] == '\0') {
+        socket_dir = "/tmp/.xrdp";
+    }
+
+    socket_name = pa_modargs_get_value(ma, "xrdp_pulse_sink_socket",
+                                       getenv("XRDP_PULSE_SINK_SOCKET"));
+    if (socket_name == NULL || socket_name[0] == '\0')
+    {
+        int display_num = get_display_num_from_display(getenv("DISPLAY"));
+
+        pa_log_debug("Could not obtain sink_socket from environment.");
+        snprintf(default_socket_name, sizeof(default_socket_name),
+                 "xrdp_chansrv_audio_out_socket_%d", display_num);
+        socket_name = default_socket_name;
+    }
+
+    nbytes = strlen(socket_dir) + 1 + strlen(socket_name) + 1;
+    u->sink_socket = pa_xmalloc(nbytes);
+    snprintf(u->sink_socket, nbytes, "%s/%s", socket_dir, socket_name);
 }
 
 int pa__init(pa_module*m) {
@@ -495,7 +507,7 @@ int pa__init(pa_module*m) {
     nbytes = pa_usec_to_bytes(u->block_usec, &u->sink->sample_spec);
     pa_sink_set_max_request(u->sink, nbytes);
 
-    u->display_num = get_display_num_from_display(getenv("DISPLAY"));
+    set_sink_socket(ma, u);
 
     u->fd = -1;
 
@@ -566,5 +578,6 @@ void pa__done(pa_module*m) {
         pa_rtpoll_free(u->rtpoll);
     }
 
+    pa_xfree(u->sink_socket);
     pa_xfree(u);
 }

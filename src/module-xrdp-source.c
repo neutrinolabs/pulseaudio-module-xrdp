@@ -69,7 +69,9 @@ PA_MODULE_USAGE(
         "source_name=<name of source> "
         "channel_map=<channel map> "
         "description=<description for the source> "
-        "latency_time=<latency time in ms>");
+        "latency_time=<latency time in ms> "
+        "xrdp_socket_path=<path to XRDP sockets> "
+        "xrdp_pulse_source_socket=<name of source socket>");
 
 #define DEFAULT_SOURCE_NAME "xrdp-source"
 #define DEFAULT_LATENCY_TIME 10
@@ -92,7 +94,7 @@ struct userdata {
 
     /* xrdp stuff */
     int fd;            /* UDS connection to xrdp chansrv */
-    int display_num;   /* X display number */
+    char *source_socket;
     int want_src_data;
 };
 
@@ -104,10 +106,12 @@ static const char* const valid_modargs[] = {
     "channel_map",
     "description",
     "latency_time",
+    "xrdp_socket_path",
+    "xrdp_pulse_source_socket",
     NULL
 };
 
-static int get_display_num_from_display(char *display_text) ;
+static int get_display_num_from_display(const char *display_text) ;
 
 static int source_process_msg(pa_msgobject *o, int code, void *data,
                               int64_t offset, pa_memchunk *chunk) {
@@ -178,8 +182,6 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
     int read_bytes;
     struct sockaddr_un s;
     char *data;
-    char *socket_dir;
-    char *source_socket;
     char buf[11];
     unsigned char ubuf[10];
 
@@ -188,27 +190,7 @@ static int data_get(struct userdata *u, pa_memchunk *chunk) {
         fd = socket(PF_LOCAL, SOCK_STREAM, 0);
         memset(&s, 0, sizeof(s));
         s.sun_family = AF_UNIX;
-        bytes = sizeof(s.sun_path) - 1;
-        socket_dir = getenv("XRDP_SOCKET_PATH");
-        if (socket_dir == NULL || socket_dir[0] == '\0')
-        {
-            socket_dir = "/tmp/.xrdp";
-        }
-        source_socket = getenv("XRDP_PULSE_SOURCE_SOCKET");
-        if (source_socket == NULL || source_socket[0] == '\0')
-        {
-
-            pa_log_debug("Could not obtain source_socket from environment.");
-            /* usually it doesn't reach here. if the socket name is not given
-               via environment variable, use hardcoded name as fallback */
-            snprintf(s.sun_path, bytes,
-                    "%s/xrdp_chansrv_audio_in_socket_%d", socket_dir, u->display_num);
-        }
-        else
-        {
-            pa_log_debug("Obtained source_socket from environment.");
-            snprintf(s.sun_path, bytes, "%s/%s", socket_dir, source_socket);
-        }
+            pa_strlcpy(s.sun_path, u->source_socket, sizeof(s.sun_path));
         pa_log_debug("Trying to connect to %s", s.sun_path);
 
         if (connect(fd, (struct sockaddr *) &s, sizeof(struct sockaddr_un)) != 0) {
@@ -386,6 +368,36 @@ finish:
     pa_log_debug("###### thread shutting down");
 }
 
+static void set_source_socket(pa_modargs *ma, struct userdata *u) {
+    const char *socket_dir;
+    const char *socket_name;
+    char default_socket_name[64];
+    size_t nbytes;
+
+
+    socket_dir = pa_modargs_get_value(ma, "xrdp_socket_path",
+                                      getenv("XRDP_SOCKET_PATH"));
+    if (socket_dir == NULL || socket_dir[0] == '\0') {
+        socket_dir = "/tmp/.xrdp";
+    }
+
+    socket_name = pa_modargs_get_value(ma, "xrdp_pulse_source_socket",
+                                       getenv("XRDP_PULSE_SOURCE_SOCKET"));
+    if (socket_name == NULL || socket_name[0] == '\0')
+    {
+        int display_num = get_display_num_from_display(getenv("DISPLAY"));
+
+        pa_log_debug("Could not obtain source_socket from environment.");
+        snprintf(default_socket_name, sizeof(default_socket_name),
+                 "xrdp_chansrv_audio_out_socket_%d", display_num);
+        socket_name = default_socket_name;
+    }
+
+    nbytes = strlen(socket_dir) + 1 + strlen(socket_name) + 1;
+    u->source_socket = pa_xmalloc(nbytes);
+    snprintf(u->source_socket, nbytes, "%s/%s", socket_dir, socket_name);
+}
+
 int pa__init(pa_module *m) {
     struct userdata *u = NULL;
     pa_sample_spec ss;
@@ -458,6 +470,8 @@ int pa__init(pa_module *m) {
     u->source->thread_info.max_rewind =
         pa_usec_to_bytes(u->block_usec, &u->source->sample_spec);
 
+    set_source_socket(ma, u);
+
     u->fd = -1;
 
 #if defined(PA_CHECK_VERSION)
@@ -476,8 +490,6 @@ int pa__init(pa_module *m) {
     pa_source_put(u->source);
 
     pa_modargs_free(ma);
-
-    u->display_num = get_display_num_from_display(getenv("DISPLAY"));
 
     return 0;
 
@@ -514,10 +526,11 @@ void pa__done(pa_module*m) {
     if (u->rtpoll)
         pa_rtpoll_free(u->rtpoll);
 
+    pa_xfree(u->source_socket);
     pa_xfree(u);
 }
 
-static int get_display_num_from_display(char *display_text) {
+static int get_display_num_from_display(const char *display_text) {
     int index;
     int mode;
     int host_index;
