@@ -1,8 +1,9 @@
 /***
-  This file is part of PulseAudio.
+  pulse source module for xrdp
 
   Copyright 2004-2008 Lennart Poettering
   Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies).
+  Copyright (C) 2013-2021 Jay Sorg, Neutrino Labs, and all contributors.
 
   PulseAudio is free software; you can redistribute it and/or modify
   it under the terms of the GNU Lesser General Public License as published
