@@ -148,7 +148,7 @@ If you can see lots of `module-*.so` and `module-xrdp-sink.so`,
 `module-xrdp-source.so`, PulseAudio modules should be properly built and
 installed.
 
-`module-xrdp-sink.la` and `module-xrdp-source.so` may be installed to the
+`module-xrdp-sink.so` and `module-xrdp-source.so` may be installed to the
 target directory, these files are not necessary and you can remove them safely.
 
 Enjoy!
