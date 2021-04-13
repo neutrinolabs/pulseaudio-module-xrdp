@@ -15,11 +15,11 @@ Protocol: Audio Output Virtual Channel Extension
 which means it is interoperable with any RDP client which implements it
 (most of them including: MS RDP clients, FreeRDP).
 
-However, our Microphone redirection (client to server) implementation is
-proprietary and doesn't implement the
+The client to server audio redirection is implemented as per **Remote Desktop
+Protocol: Audio Input Redirection Virtual Channel Extension
 [[MS-RDPEAI]](https://msdn.microsoft.com/en-us/library/dd342521.aspx)
-specs. Its only supported by the following clients so far: NeutrinoRDP client
-and rdesktop.
+which means it is interoperable with any RDP client which implements it
+(most of them including: MS RDP clients, FreeRDP).
 
 Here is how to build pulseaudio modules for your distro, so you can have audio
 support through xrdp.
