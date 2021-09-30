@@ -578,6 +578,12 @@ void pa__done(pa_module*m) {
         pa_rtpoll_free(u->rtpoll);
     }
 
+    if (u->fd >= 0)
+    {
+        close(u->fd);
+        u->fd = -1;
+    }
+
     pa_xfree(u->sink_socket);
     pa_xfree(u);
 }

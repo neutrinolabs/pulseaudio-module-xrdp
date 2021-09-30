@@ -526,6 +526,12 @@ void pa__done(pa_module*m) {
     if (u->rtpoll)
         pa_rtpoll_free(u->rtpoll);
 
+    if (u->fd >= 0)
+    {
+        close(u->fd);
+        u->fd = -1;
+    }
+
     pa_xfree(u->source_socket);
     pa_xfree(u);
 }
