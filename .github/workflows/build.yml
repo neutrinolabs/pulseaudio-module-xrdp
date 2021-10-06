@@ -1,0 +1,28 @@
+name: build
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      # This is currently the only way to get a version into
+      # the cache tag name - see https://github.com/actions/cache/issues/543
+      - run: |
+          echo "OS_VERSION=`lsb_release -sr`" >> $GITHUB_ENV
+      - uses: actions/checkout@v2
+      - name: Cache pulseaudio source
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-pulseaudio-src
+        with:
+          path: ~/pulseaudio.src
+          key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
+      - run: scripts/install_pulseaudio_sources.sh
+      - run: sudo apt-get update
+      - run: sudo apt-get -yq install build-essential libpulse-dev
+      - run: ./bootstrap
+      - run: ./configure PULSE_DIR=~/pulseaudio.src
+      - run: make
