@@ -372,8 +372,6 @@ static void process_render(struct userdata *u, pa_usec_t now) {
 static void thread_func(void *userdata) {
 
     struct userdata *u = userdata;
-    int ret;
-    pa_usec_t now;
 
     pa_assert(u);
 
