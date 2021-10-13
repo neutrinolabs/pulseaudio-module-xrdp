@@ -4,8 +4,8 @@ on:
   pull_request:
 
 jobs:
-  build:
-    name: build
+  install_pa_sources:
+    name: install PA sources
     runs-on: ubuntu-latest
     steps:
       # This is currently the only way to get a version into
@@ -21,6 +21,37 @@ jobs:
           path: ~/pulseaudio.src
           key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
       - run: scripts/install_pulseaudio_sources.sh
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          - CC: gcc
+
+          - CC: clang
+
+    name: build with ${{ matrix.CC }}
+    runs-on: ubuntu-latest
+    needs: install_pa_sources
+    env:
+      CC: ${{ matrix.CC }}
+      CFLAGS: -Wall -Wextra -Werror
+
+    steps:
+      # This is currently the only way to get a version into
+      # the cache tag name - see https://github.com/actions/cache/issues/543
+      - run: |
+          echo "OS_VERSION=`lsb_release -sr`" >> $GITHUB_ENV
+      - name: Fetch pulseaudio sources
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-pulseaudio-src
+        with:
+          path: ~/pulseaudio.src
+          key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
+      - uses: actions/checkout@v2
       - run: sudo apt-get update
       - run: sudo apt-get -yq install build-essential libpulse-dev
       - run: ./bootstrap
