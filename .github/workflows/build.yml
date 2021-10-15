@@ -20,7 +20,7 @@ jobs:
         with:
           path: ~/pulseaudio.src
           key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
-      - run: scripts/install_pulseaudio_sources.sh
+      - run: scripts/install_pulseaudio_sources_apt.sh
 
   build:
     strategy:

@@ -28,7 +28,7 @@ PULSE_DIR=$HOME/pulseaudio.src
 
 # Absolute path to the script we're wrapping. This picks it up from
 # the same directory this file is in
-WRAPPED_SCRIPT=$(cd $(dirname $0) && pwd)/install_pulseaudio_sources.sh
+WRAPPED_SCRIPT=$(cd $(dirname $0) && pwd)/install_pulseaudio_sources_apt.sh
 
 # The buildroot directory. Choose fast, temporary storage if available
 BUILDROOT=/var/lib/pa-build/$USER
