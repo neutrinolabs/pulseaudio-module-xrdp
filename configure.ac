@@ -80,5 +80,6 @@ AC_TYPE_UINT32_T
 AC_CHECK_FUNCS([memset socket])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+                 instfiles/Makefile])
 AC_OUTPUT
