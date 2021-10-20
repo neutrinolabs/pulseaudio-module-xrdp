@@ -396,6 +396,21 @@ int pa__init(pa_module *m) {
 
     pa_assert(m);
 
+    /* Check the runtime library version matches the build version */
+    if (strcmp(pa_get_library_version(), pa_get_headers_version()) == 0)
+    {
+        pa_log_notice("Build library version %s",  pa_get_headers_version());
+    }
+    else
+    {
+        pa_log_warn("Runtime version '%s' differs from build version '%s'",
+                    pa_get_library_version(), pa_get_headers_version());
+    }
+
+    if (!(ma = pa_modargs_new(m->argument, valid_modargs))) {
+        pa_log("Failed to parse module arguments.");
+        goto fail;
+    }
     if (!(ma = pa_modargs_new(m->argument, valid_modargs))) {
         pa_log("Failed to parse module arguments.");
         goto fail;
