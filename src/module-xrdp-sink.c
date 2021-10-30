@@ -88,6 +88,7 @@ PA_MODULE_USAGE(
 #define DEFAULT_SINK_NAME "xrdp-sink"
 #define BLOCK_USEC 30000
 //#define BLOCK_USEC (PA_USEC_PER_SEC * 2)
+#define UNUSED_VAR(x) ((void) (x))
 
 /* support for the set_state_in_io_thread callback was added in 11.99.1 */
 #if defined(PA_CHECK_VERSION) && PA_CHECK_VERSION(11, 99, 1)
@@ -186,6 +187,8 @@ static int sink_set_state_in_io_thread_cb(pa_sink *s,
                                           pa_suspend_cause_t new_suspend_cause)
 {
     struct userdata *u;
+
+    UNUSED_VAR(new_suspend_cause);
 
     pa_assert(s);
     pa_assert_se(u = s->userdata);
