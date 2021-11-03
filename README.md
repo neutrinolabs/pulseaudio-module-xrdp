@@ -1,9 +1,5 @@
-[![Build Status](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp.svg?branch=devel)](https://travis-ci.org/neutrinolabs/pulseaudio-module-xrdp)
-
-The latest version of this document can be found at wiki.
-
-* https://github.com/neutrinolabs/pulseaudio-module-xrdp/wiki/README
-
+[![Build Status](https://github.com/neutrinolabs/pulseaudio-module-xrdp/actions/workflows/build.yml/badge.svg)](https://github.com/neutrinolabs/pulseaudio-module-xrdp/actions)
+[![Gitter (xrdp)](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/neutrinolabs/xrdp-questions)
 
 # Overview
 xrdp implements Audio Output redirection using PulseAudio, which is a sound
@@ -17,144 +13,57 @@ which means it is interoperable with any RDP client which implements it
 
 The client to server audio redirection is implemented as per **Remote Desktop
 Protocol: Audio Input Redirection Virtual Channel Extension
-[[MS-RDPEAI]](https://msdn.microsoft.com/en-us/library/dd342521.aspx)
+[[MS-RDPEAI]](https://msdn.microsoft.com/en-us/library/dd342521.aspx)**
 which means it is interoperable with any RDP client which implements it
 (most of them including: MS RDP clients, FreeRDP).
 
-Here is how to build pulseaudio modules for your distro, so you can have audio
-support through xrdp.
-
-In this instruction, pulseaudio version is **11.1**. You need to **replace the
-version number in this instruction** if your environment has different
-versions. You can find out your pulseaudio version executing the following
-command:
-
-    pulseaudio --version
-
-or
-
-    pkg-config --modversion libpulse
-
 # How to build
+These modules make use of the internal pulseaudio module API. To build
+them you need access to the pulseaudio sources and configuration.
 
-## Debian 9 / Ubuntu
+*Be aware that the pulseaudio application development packages provided
+with many distributions do not contain the files necessary to use the
+pulseaudio module API*. Consequently, the preparation for building these
+modules can be a little more involved than just installing development
+tools and packages.
 
-This instruction also should be applicable to the Ubuntu family.
+Consult the Pulseaudio Wiki for instructions on building the modules
+for your platform:-
 
-### Prerequisites
-
-Some build tools and package development tools are required. Make sure install
-the tools.
-
-    apt install build-essential dpkg-dev
-
-### Prepare & build
-
-Install pulseaudio and requisite packages to build pulseaudio.
-
-    apt install pulseaudio
-    apt build-dep pulseaudio
-
-Fetch the pulseaudio source. You'll see `pulseaudio-11.1` directory in your
-current directory.
-
-    apt source pulseaudio
-
-Enter into the directory and build the pulseaudio package.
-
-    cd pulseaudio-11.1
-    ./configure
-
-Finally, let's build xrdp source / sink modules. You'll have two .so files
-`module-xrdp-sink.so` and `module-xrdp-source.so`.
-
-    git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
-    cd pulseaudio-module-xrdp
-    ./bootstrap && ./configure PULSE_DIR=/path/to/pulseaudio-11.1
-    make
-
-## CentOS 7.x (7.5 or later requires this build procedure)
-
-### Prerequisites
-
-Some build tools and package development tools are required. Make sure install
-the tools.
-
-    yum groupinstall "Development Tools"
-    yum install rpmdevtools yum-utils
-    rpmdev-setuptree
-
-### Prepare & build
-
-Install pulseaudio and requisite packages to build pulseaudio.
-
-    yum install pulseaudio pulseaudio-libs pulseaudio-libs-devel
-    yum-builddep pulseaudio
-
-Fetch the pulseaudio source and extract. You'll see `~/rpmbuild/BUILD/
-
-    yumdownloader --source pulseaudio
-    rpm --install pulseaudio*.src.rpm
-
-Build the pulseaudio source. In this phase, pulseaudio is not necessarily needed to be built but
-configured however there's no way to do only configure.
-
-    rpmbuild -bb --noclean ~/rpmbuild/SPECS/pulseaudio.spec
-
-Finally, let's build xrdp source / sink modules. You'll have two .so files
-`module-xrdp-sink.so` and `module-xrdp-source.so`.
-
-    git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
-    cd pulseaudio-module-xrdp
-    ./bootstrap && ./configure PULSE_DIR=~/rpmbuild/BUILD/pulseaudio-10.0
-    make
-
-## Other distro
-
-First off, find out your pulseaudio version using `pulseaudio --version`
-command. Download the tarball of the pulseaudio version that you have.
-
-* https://freedesktop.org/software/pulseaudio/releases/
-
-After downloading the tarball, extract the tarball and `cd` into the source
-directory, then run `./configure`.
-
-    wget https://freedesktop.org/software/pulseaudio/releases/pulseaudio-11.1.tar.xz
-    tar xf pulseaudio-11.1.tar.xz
-    cd pulseaudio-11.1
-    ./configure
-
-If additional packages are required to run `./configure`, install requisite
-packages depending on your environment.
-
-Finally, let's build xrdp source / sink modules. You'll have two .so files
-`module-xrdp-sink.so` and `module-xrdp-source.so`.
-
-    git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
-    cd pulseaudio-module-xrdp
-    ./bootstrap && ./configure PULSE_DIR=/path/to/pulseaudio-11.1
-    make
+https://github.com/neutrinolabs/pulseaudio-module-xrdp/wiki
 
 # Install
+One the modules have been built, `sudo make install` should do the following:-
+- Install the modules to the correct directory
+- Install a script `load_pa_modules.sh` to load the modules when a
+  session is started.
+  On many systems this script is installed by default in
+  /usr/libexec/pulseaudio-module-xrdp/
+- Install a desktop file `pulseaudio-xrdp.desktop` which will call the
+  `load_pa_modules.sh` script when a desktop is loaded.
+  On many systems this script is installed by default in
+  `/etc/xdg/autostart`
 
-Just `make install` should install built modules to the correct directory.
+Note that the modules will only be loaded automatically when the desktop
+starts if your desktop supports the XDG autostart specification. Most modern
+desktops support this.
 
-You can confirm if the modules properly installed by following command:
+You can confirm if the modules are properly installed by following command:
 ```
-ls $(pkg-config --variable=modlibexecdir libpulse)
+ls $(pkg-config --variable=modlibexecdir libpulse) | grep xrdp
 ```
 
-If you can see lots of `module-*.so` and `module-xrdp-sink.so`,
-`module-xrdp-source.so`, PulseAudio modules should be properly built and
-installed.
-
-`module-xrdp-sink.so` and `module-xrdp-source.so` may be installed to the
-target directory, these files are not necessary and you can remove them safely.
+If you can see `module-xrdp-sink.so` and `module-xrdp-source.so`,
+PulseAudio modules are properly built and installed.
 
 Enjoy!
 
 # See if it works
+The easiest way to test this is to use the `paplay` command to play an
+audio file.
 
-To see if it works, run `pavumeter` in the xrdp session.  Playback any YouTube
-video in Firefox. You'll see "Showing signal levels of **xrdp sink**" and
-volume meter moving.
+You can also do the following:-
+- run `pavumeter` in the xrdp session-
+- Playback any YouTube video in Firefox.
+
+You'll see "Showing signal levels of **xrdp sink**" and volume meter moving.
