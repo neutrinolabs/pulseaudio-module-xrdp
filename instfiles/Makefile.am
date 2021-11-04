@@ -22,10 +22,6 @@ SUFFIXES = .in
 #
 # files for all platforms
 #
-
-# Don't use sysconfdir for this one as it won't work!
-xdgautostartdir=/etc/xdg/autostart
-
 xdgautostart_DATA = \
   pulseaudio-xrdp.desktop
 
