@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PACTL=/usr/bin/pactl
+status=0
 
 if [ -n "$XRDP_SESSION" -a -n "$XRDP_SOCKET_PATH" ]; then
     # These values are not present on xrdp versions before v0.9.8
@@ -16,17 +16,39 @@ if [ -n "$XRDP_SESSION" -a -n "$XRDP_SOCKET_PATH" ]; then
     # are loaded they won't be there
 
     # Unload modules
-    $PACTL unload-module module-xrdp-sink >/dev/null 2>&1
-    $PACTL unload-module module-xrdp-source >/dev/null 2>&1
+    pactl unload-module module-xrdp-sink >/dev/null 2>&1
+    pactl unload-module module-xrdp-source >/dev/null 2>&1
 
     # Reload modules
-    $PACTL load-module module-xrdp-sink \
-        xrdp_socket_path=$XRDP_SOCKET_PATH \
-        xrdp_pulse_sink_socket=$XRDP_PULSE_SINK_SOCKET && \
-    \
-    $PACTL load-module module-xrdp-source \
-        xrdp_socket_path=$XRDP_SOCKET_PATH \
-        xrdp_pulse_source_socket=$XRDP_PULSE_SOURCE_SOCKET
+    if pactl load-module module-xrdp-sink \
+           xrdp_socket_path=$XRDP_SOCKET_PATH \
+           xrdp_pulse_sink_socket=$XRDP_PULSE_SINK_SOCKET
+    then
+        echo "- pulseaudio xrdp-sink loaded"
+        if pacmd set-default-sink xrdp-sink; then
+            echo "- pulseaudio xrdp-sink set as default"
+        else
+            echo "? Can't set pulseaudio xrdp-sink as default"
+        fi
+    else
+        echo "? Can't load pulseaudio xrdp-sink"
+        status=1
+    fi
+
+    if pactl load-module module-xrdp-source \
+           xrdp_socket_path=$XRDP_SOCKET_PATH \
+           xrdp_pulse_source_socket=$XRDP_PULSE_SOURCE_SOCKET
+    then
+        echo "- pulseaudio xrdp-source loaded"
+        if pacmd set-default-source xrdp-source; then
+            echo "- pulseaudio xrdp-source set as default"
+        else
+            echo "? Can't set pulseaudio xrdp-source as default"
+        fi
+    else
+        echo "? Can't load pulseaudio xrdp-source"
+        status=1
+    fi
 fi
 
-exit $?
+exit $status
