@@ -28,6 +28,9 @@ PA_LIBDIR=`$PKG_CONFIG --variable=libdir libpulse`
 PA_MODDIR=`$PKG_CONFIG --variable=modlibexecdir libpulse`
 PA_PREFIX=`$PKG_CONFIG --variable=prefix libpulse`
 
+# Default system-wide autostart directory from XDG autostart specification
+m4_define([XDG_AUTOSTART_DIR], /etc/xdg/autostart)
+
 AC_SUBST([PA_MAJOR], [pa_major])
 AC_SUBST([PA_MINOR], [pa_minor])
 AC_SUBST([PA_MAJORMINOR], [pa_major].[pa_minor])
@@ -68,6 +71,13 @@ AC_ARG_WITH(
     [modlibexecdir=$withval], [modlibexecdir="${PA_MODDIR}"])
 AC_SUBST(modlibexecdir)
 
+AC_ARG_WITH(
+    [xdgautostart-dir],
+    [AS_HELP_STRING([--with-xdgautostart-dir],
+                    Directory to install the desktop file (defaults to XDG_AUTOSTART_DIR))],
+    [xdgautostartdir=$withval], [xdgautostartdir=XDG_AUTOSTART_DIR])
+AC_SUBST(xdgautostartdir)
+
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h limits.h netinet/in.h stdlib.h string.h sys/ioctl.h sys/socket.h unistd.h])
 
@@ -80,5 +90,6 @@ AC_TYPE_UINT32_T
 AC_CHECK_FUNCS([memset socket])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+                 instfiles/Makefile])
 AC_OUTPUT

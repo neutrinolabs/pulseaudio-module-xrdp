@@ -1,4 +1,4 @@
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = src
+SUBDIRS = src instfiles
 EXTRA_DIST = bootstrap.sh
