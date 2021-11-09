@@ -1,6 +1,6 @@
 AM_CFLAGS = -O2   \
             -fPIC \
-            -I $(PULSE_DIR)      \
+            -I $(PULSE_CONFIG_DIR)      \
             -I $(PULSE_DIR)/src  \
             $(XRDP_CFLAGS)
 
