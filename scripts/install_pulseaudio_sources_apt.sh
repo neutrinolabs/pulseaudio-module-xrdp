@@ -82,12 +82,12 @@ if [ ! -d "$PULSE_DIR" ]; then
     cd "$build_dir"
     if [ -x ./configure ]; then
         # This version of PA uses autotools to build
-	# This command creates ./config.h
+        # This command creates ./config.h
         ./configure
     elif [ -f ./meson.build ]; then
         # Meson only
-	rm -rf build
-	# This command creates ./build/config.h
+        rm -rf build
+        # This command creates ./build/config.h
         meson build
     else
         echo "** Unable to configure pulseaudio from files in $(pwd)" >&2
