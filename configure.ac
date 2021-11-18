@@ -20,6 +20,16 @@ fi
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
+dnl ------------------------------------------------------------------
+dnl FIND_CONFIG_H(TOP_DIRECTORY)
+dnl Find the config.h file under TOP_DIRECTORY
+dnl
+dnl Outputs the enclosing directory. Only the first match is returned.
+dnl ------------------------------------------------------------------
+m4_define([FIND_CONFIG_H],
+          [find $1 -type f -maxdepth 3 -type f -name config.h | \
+           sed -e 's#/config.h##' -e '2,$d'])
+
 # get system's pulseaudio version
 m4_define([pa_major], [`$PKG_CONFIG --modversion libpulse | cut -d. -f1`])
 m4_define([pa_minor], [`$PKG_CONFIG --modversion libpulse | cut -d. -f2`])
@@ -52,6 +62,7 @@ PKG_CHECK_MODULES([LIBPULSE], [libpulse])
 
 m4_define([PULSE_MSG], [PULSE_DIR not specified. Follow the instructions in README.md.])
 
+# Check PULSE_DIR is specified
 AC_ARG_VAR([PULSE_DIR], [pulseaudio source code directory])
 AS_IF([test x"$PULSE_DIR" == x""],
 cat <<__MSG__
@@ -59,6 +70,31 @@ m4_text_box([PULSE_MSG])
 __MSG__
 AC_MSG_ERROR([PULSE_DIR not specified])
 )
+
+# Does PULSE_DIR appear to be valid?
+AS_IF([test -e "$PULSE_DIR/src/pulsecore/macro.h"],,
+      AC_MSG_WARN([PULSE_DIR may not be valid - can't find expected file]))
+
+# Look for config.h, using PULSE_CONFIG_DIR if specified
+AC_ARG_VAR([PULSE_CONFIG_DIR], [pulseaudio config.h source code directory (optional)])
+AS_IF([test x"$PULSE_CONFIG_DIR" == x""],
+      AC_MSG_NOTICE([PULSE_CONFIG_DIR not defined])
+      AC_MSG_CHECKING([Searching for config.h under PULSE_DIR])
+      PULSE_CONFIG_DIR="`FIND_CONFIG_H(\"$PULSE_DIR\")`"
+      [AS_IF([test -e "$PULSE_CONFIG_DIR/config.h" ],
+          AC_MSG_RESULT([$PULSE_CONFIG_DIR/config.h])
+          ,
+          AC_MSG_RESULT([no])
+          AC_MSG_ERROR([Can't find config.h under PULSE_DIR. Define PULSE_CONFIG_DIR?]))]
+      ,
+      AC_MSG_NOTICE([PULSE_CONFIG_DIR is defined])
+      AC_MSG_CHECKING([Looking for config.h in PULSE_CONFIG_DIR])
+      [AS_IF([test -e "$PULSE_CONFIG_DIR/config.h"],
+          AC_MSG_RESULT([$PULSE_CONFIG_DIR/config.h])
+          ,
+          AC_MSG_RESULT([no])
+          AC_MSG_ERROR([Can't find config.h in PULSE_CONFIG_DIR.]))])
+
 
 # use the prefix as same as pulseaudio
 AC_PREFIX_PROGRAM(pulseaudio)

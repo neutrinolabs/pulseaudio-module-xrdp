@@ -50,7 +50,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ ! -d $PULSE_DIR ]; then
+if [ ! -d "$PULSE_DIR" ]; then
     # Operating system release ?
     RELEASE="$(lsb_release -si)-$(lsb_release -sr)"
     echo "Building for : $RELEASE"
@@ -70,25 +70,41 @@ if [ ! -d $PULSE_DIR ]; then
             ;;
     esac
 
-    cd $(dirname $PULSE_DIR)
+    cd "$(dirname $PULSE_DIR)"
     apt-get source pulseaudio
 
-    pulse_dir=$(find . -maxdepth 1 -name pulseaudio-[0-9]\*)
-    if [[ -z $pulse_dir ]]; then
-        echo "** Can't find pulse dir in $(ls)" >&2
+    build_dir="$(find . -maxdepth 1 -name pulseaudio-[0-9]\*)"
+    if [ -z "$build_dir" ]; then
+        echo "** Can't find build directory in $(ls)" >&2
         exit 1
     fi
 
-    cd $pulse_dir
-    ./configure
+    cd "$build_dir"
+    if [ -x ./configure ]; then
+        # This version of PA uses autotools to build
+	# This command creates ./config.h
+        ./configure
+    elif [ -f ./meson.build ]; then
+        # Meson only
+	rm -rf build
+	# This command creates ./build/config.h
+        meson build
+    else
+        echo "** Unable to configure pulseaudio from files in $(pwd)" >&2
+        false
+    fi
 
-    # We only need the src/ directory and config.h
     echo "- Removing unnecessary files"
-    find . -mindepth 1 -maxdepth 1 -name src -o -name config.h -o -exec rm -rf {} +
+    # We only need .h files...
+    find . -type f \! -name \*.h -delete
+    # .. in src/ and /build directories
+    find . -mindepth 1 -maxdepth 1 \
+        -name src -o -name build -o -name config.h \
+        -o -exec rm -rf {} +
 
-    echo "- Renaming $(pwd)/$pulse_dir as $PULSE_DIR"
+    echo "- Renaming $(pwd)/$build_dir as $PULSE_DIR"
     cd ..
-    mv $pulse_dir $PULSE_DIR
+    mv "$build_dir" "$PULSE_DIR"
 fi
 
 exit 0
