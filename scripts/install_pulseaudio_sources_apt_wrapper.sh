@@ -19,6 +19,10 @@
 
 # Wrapper to call install_pulseaudio_sources.sh and tidy up afterwards
 
+# The command line switches --mirror= and --keyring= can be specified if
+# these switches are needed for a system based on Debian (e.g. a Raspberry
+# Pi)
+
 # ---------------------------------------------------------------------------
 # G L O B A L S
 # ---------------------------------------------------------------------------
@@ -98,6 +102,29 @@ RunWrappedScript()
 # M A I N
 # -----------------------------------------------------------------------------
 
+debootstrap_mirror=""
+debootstrap_switches=""
+
+# Parse command line switches
+while [ -n "$1" ]; do
+    case "$1" in
+        --mirror=*)
+            debootstrap_mirror="${1#--mirror=}"
+            ;;
+        --keyring=*)
+            file="${1#--keyring=}"
+            if [ -f "$file" ]; then
+                debootstrap_switches="$debootstrap_switches $1"
+            else
+                echo "** Ignoring missing keyring $1" >&2
+            fi
+            ;;
+        *)  echo "** Unrecognised parameter '$1'" >&2
+            exit 1
+    esac
+    shift
+done
+
 # Start with a few sanity checks
 if [ -d $PULSE_DIR ]; then
     echo "** Target directory $PULSE_DIR already exists" >&2
@@ -127,8 +154,10 @@ fi
 # Create the build root
 log=/var/tmp/pa-build-$USER-debootstrap.log
 echo "- Creating $distro build root. Log file in $log"
-sudo debootstrap $distro $BUILDROOT >$log 2>&1 || {
-    echo "** debootstrap failed. Check log file" >&2
+sudo debootstrap \
+    $debootstrap_switches \
+    $distro $BUILDROOT "$debootstrap_mirror" >$log 2>&1 || {
+    echo "** debootstrap failed. Check log file $log" >&2
     exit 1
 }
 
@@ -159,7 +188,7 @@ sudo chmod +x $BUILDROOT/wrapped_script || exit $?
 log=/var/tmp/pa-build-$USER-schroot.log
 echo "- Building PA sources. Log file in $log"
 RunWrappedScript >$log 2>&1 || {
-    echo "** schroot failed. Check log file" >&2
+    echo "** schroot failed. Check log file $log" >&2
     exit 1
 }
 
