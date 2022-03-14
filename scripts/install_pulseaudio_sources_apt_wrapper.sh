@@ -18,10 +18,21 @@
 #
 
 # Wrapper to call install_pulseaudio_sources.sh and tidy up afterwards
-
-# The command line switches --mirror= and --keyring= can be specified if
-# these switches are needed for a system based on Debian (e.g. a Raspberry
-# Pi)
+#
+# The following command line switches are supported, for systems based on
+# Debian or Ubuntu:-
+#
+# 1) --mirror=    Specify an alternative mirror for debootstrap
+# 2) --keyring=   Specify an alternative keyring for debootstrap
+# 3) --suite=     Specify an alternative suite for debootstrap
+#
+#    The first two of these are are needed for systems with their own
+#    mirrors and signing keys (i.e. Raspberry PI OS).
+#
+#    --suite is useful for systems which report their own codename for
+#    `lsb_release -c`, but are otherwise based on a standard distro. For
+#    example Linux Mint 20.04 reports 'una', but is largely based on
+#    Ubuntu 'focal'
 
 # ---------------------------------------------------------------------------
 # G L O B A L S
@@ -41,6 +52,16 @@ BUILDROOT=/var/lib/pa-build/$USER
 # may be using. These are packages available by default when using
 # GitHub actions
 WRAPPED_SCRIPT_DEPS="sudo lsb-release"
+
+# -----------------------------------------------------------------------------
+# S U I T E   E X I S T S
+#
+# Does the specified debootstrap suite exist?
+# -----------------------------------------------------------------------------
+SuiteExists()
+{
+    [ -f "/usr/share/debootstrap/scripts/$1" ]
+}
 
 # -----------------------------------------------------------------------------
 # I N S T A L L   R E Q U I R E D   P A C K A G E S
@@ -101,9 +122,9 @@ RunWrappedScript()
 # -----------------------------------------------------------------------------
 # M A I N
 # -----------------------------------------------------------------------------
-
 debootstrap_mirror=""
 debootstrap_switches=""
+debootstrap_suite=""
 
 # Parse command line switches
 while [ -n "$1" ]; do
@@ -117,6 +138,13 @@ while [ -n "$1" ]; do
                 debootstrap_switches="$debootstrap_switches $1"
             else
                 echo "** Ignoring missing keyring $1" >&2
+            fi
+            ;;
+        --suite=*)
+            debootstrap_suite="${1#--suite=}"
+            if ! SuiteExists "$debootstrap_suite"; then
+                echo "** Unsupported suite '$debootstrap_suite'" >&2
+                exit 1
             fi
             ;;
         *)  echo "** Unrecognised parameter '$1'" >&2
@@ -144,19 +172,27 @@ fi
 # Do we need extra packages?
 InstallRequiredPackages || exit $?
 
-# We should be able to determine the distro now
-distro=$(lsb_release -cs) ; # e.g. 'bullseye'
-if [ -z "$distro" ]; then
-    echo "** Can't determine current distro" >&2
-    exit 1
+# We should be able to determine the suite now, if it's not specified
+if [ -z "$debootstrap_suite" ]; then
+    debootstrap_suite=$(lsb_release -cs) ; # e.g. 'bullseye'
+    if [ -z "$debootstrap_suite" ]; then
+        echo "** Can't determine current suite" >&2
+        exit 1
+    fi
+
+    if ! SuiteExists "$debootstrap_suite" ; then
+        echo "** Current distro '$debootstrap_suite' does not appear to be supported by debootstrap" >&2
+        echo "   Need --suite switch?" >&2
+        exit 1
+    fi
 fi
 
 # Create the build root
 log=/var/tmp/pa-build-$USER-debootstrap.log
-echo "- Creating $distro build root. Log file in $log"
+echo "- Creating $debootstrap_suite build root. Log file in $log"
 sudo debootstrap \
     $debootstrap_switches \
-    $distro $BUILDROOT "$debootstrap_mirror" >$log 2>&1 || {
+    $debootstrap_suite $BUILDROOT "$debootstrap_mirror" >$log 2>&1 || {
     echo "** debootstrap failed. Check log file $log" >&2
     exit 1
 }
@@ -172,12 +208,6 @@ echo "- Creating schroot config file $schroot_conf"
     echo "users=$USER"
     echo "type=directory"
 } | sudo tee $schroot_conf >/dev/null || exit $?
-
-# Copy some files to the build root
-for file in /etc/apt/sources.list; do
-    echo "- Copying $file to the root"
-    sudo cp $file $BUILDROOT/$file || exit $?
-done
 
 # Copy the wrapped script to the buildroot root
 echo "- Copying the wrapped script to the root"
