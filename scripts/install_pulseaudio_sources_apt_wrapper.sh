@@ -37,9 +37,9 @@
 # ---------------------------------------------------------------------------
 # G L O B A L S
 # ---------------------------------------------------------------------------
-# Where the output files are going. Must be under $HOME as schroot
-# assumes this.
-PULSE_DIR=$HOME/pulseaudio.src
+# Where the output files are going
+PULSE_DIRNAME=pulseaudio.src
+PULSE_DIR=$HOME/$PULSE_DIRNAME
 
 # Absolute path to the script we're wrapping. This picks it up from
 # the same directory this file is in
@@ -100,23 +100,29 @@ InstallRequiredPackages()
 #
 # This function definition uses () rather than {} to create an extra
 # sub-process where we can run 'set -e' without affecting the parent
+#
+# Parameters : <script> [<script params>...]
 # -----------------------------------------------------------------------------
 RunWrappedScript()
 (
     # In this sub-process, fail on error
     set -e
 
+    # Define default args for running program
+    # -c : Define the schroot config to use
+    # -d : Directory to switch to before running command
+    schroot="schroot -c pa-build-$USER -d /build"
+
     # Install extra dependencies
-    schroot -c pa-build-$USER -u root -- \
-        apt-get install -y $WRAPPED_SCRIPT_DEPS
+    $schroot -u root -- apt-get install -y $WRAPPED_SCRIPT_DEPS
 
     # Allow normal user to sudo without a password
-    schroot -c pa-build-$USER -u root -- \
+    $schroot -u root -- \
         /bin/sh -c "echo '$USER ALL=(ALL) NOPASSWD:ALL'>/etc/sudoers.d/nopasswd-$USER"
-    schroot -c pa-build-$USER -u root -- chmod 400 /etc/sudoers.d/nopasswd-$USER
+    $schroot -u root -- chmod 400 /etc/sudoers.d/nopasswd-$USER
 
     # Call the wrapped script
-    schroot -c pa-build-$USER -- /wrapped_script -d $PULSE_DIR
+    $schroot -- "$@"
 )
 
 # -----------------------------------------------------------------------------
@@ -209,19 +215,39 @@ echo "- Creating schroot config file $schroot_conf"
     echo "type=directory"
 } | sudo tee $schroot_conf >/dev/null || exit $?
 
+# Copy some files to the build root
+for file in /etc/apt/sources.list; do
+    echo "- Copying $file to the root"
+    sudo install -m 0644 $file $BUILDROOT/$file || exit $?
+done
+
+# Create a separate directory in $BUILDROOT to hold the build
+# artefacts.
+#
+# We used to do the build on the user's home directory, but this
+# isn't supported by schroot out-of-the-box on all configurations -
+# see https://github.com/neutrinolabs/pulseaudio-module-xrdp/issues/76
+echo "- Creating the build directory /build"
+sudo install -d --mode=0775 --owner=$USER --group=$(id -g) \
+    $BUILDROOT/build || exit $?
+
 # Copy the wrapped script to the buildroot root
-echo "- Copying the wrapped script to the root"
-sudo install -m 755 $WRAPPED_SCRIPT $BUILDROOT/wrapped_script || exit $?
+echo "- Copying the wrapped script to the build directory"
+sudo install -m 755 $WRAPPED_SCRIPT $BUILDROOT/build/wrapped_script || exit $?
 
 # Run the wrapped script
 log=/var/tmp/pa-build-$USER-schroot.log
 echo "- Building PA sources. Log file in $log"
-RunWrappedScript >$log 2>&1 || {
+RunWrappedScript /build/wrapped_script  -d /build/$PULSE_DIRNAME >$log 2>&1 || {
     echo "** schroot failed. Check log file $log" >&2
     exit 1
 }
 
-# Done! Remove the schroot config file as its no longer needed
+# Done! Copy the resulting directory out of the build root
+echo "- Copying sources out of the build root"
+cp -pr $BUILDROOT/build/$PULSE_DIRNAME $PULSE_DIR || exit $?
+
+# Remove the schroot config file as its no longer needed
 echo "- Removing schroot config file and build root"
 sudo rm -rf $schroot_conf $BUILDROOT
 
