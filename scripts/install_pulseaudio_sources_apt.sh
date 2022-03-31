@@ -53,11 +53,47 @@ done
 if [ ! -d "$PULSE_DIR" ]; then
     # Operating system release ?
     RELEASE="$(lsb_release -si)-$(lsb_release -sr)"
-    echo "Building for : $RELEASE"
+    codename=$(lsb_release -cs)
+    echo "Building for : $RELEASE ($codename)"
+
+    # Do any special-case stuff related to repositories
+    case $(lsb_release -si) in
+        Ubuntu)
+            # Enable the universe repository. Don't use add-apt-repository
+            # as this has a huge number of dependencies.
+            if ! grep -q '^ *[^#].* universe *' /etc/apt/sources.list; then
+                echo "- Adding 'universe' repository" >&2
+                cp /etc/apt/sources.list /tmp/sources.list
+                while read type url suite rest; do
+                    if [ "$type" = deb -a "$rest" = main ]; then
+                        case "$suite" in
+                            $codename | $codename-updates | $codename-security)
+                                echo "deb $url $suite universe"
+                                ;;
+                        esac
+                    fi
+                done </tmp/sources.list \
+                     | sudo tee -a /etc/apt/sources.list >/dev/null
+                rm /tmp/sources.list
+            fi
+            ;;
+    esac
 
     # Make sure sources are available
     if ! grep -q '^ *deb-src' /etc/apt/sources.list; then
-        sudo sed -i.bak -e 's|^# deb-src|deb-src|' /etc/apt/sources.list
+        echo "- Adding source repositories" >&2
+        cp /etc/apt/sources.list /tmp/sources.list
+        while read type url suite rest; do
+            if [ "$type" = deb ]; then
+                case "$suite" in
+                    $codename | $codename-updates | $codename-security)
+                        echo "deb-src $url $suite $rest"
+                        ;;
+                esac
+            fi
+        done </tmp/sources.list \
+             | sudo tee -a /etc/apt/sources.list >/dev/null
+        rm /tmp/sources.list
     fi
 
     sudo apt-get update
