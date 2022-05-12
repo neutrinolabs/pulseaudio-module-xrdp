@@ -211,8 +211,7 @@ echo "- Creating schroot config file $schroot_conf"
 
 # Copy the wrapped script to the buildroot root
 echo "- Copying the wrapped script to the root"
-sudo cp $WRAPPED_SCRIPT $BUILDROOT/wrapped_script || exit $?
-sudo chmod +x $BUILDROOT/wrapped_script || exit $?
+sudo install -m 755 $WRAPPED_SCRIPT $BUILDROOT/wrapped_script || exit $?
 
 # Run the wrapped script
 log=/var/tmp/pa-build-$USER-schroot.log
