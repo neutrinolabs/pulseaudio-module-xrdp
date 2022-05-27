@@ -8,10 +8,12 @@ jobs:
     name: install PA sources
     runs-on: ubuntu-latest
     steps:
-      # This is currently the only way to get a version into
-      # the cache tag name - see https://github.com/actions/cache/issues/543
-      - run: |
-          echo "OS_VERSION=`lsb_release -sr`" >> $GITHUB_ENV
+      # Set steps.os.outputs.image to the specific OS (e.g. 'ubuntu20')
+      # see https://github.com/actions/cache/issues/543
+      - name: Get operating system name and version.
+        id: os
+        run: echo "::set-output name=image::$ImageOS"
+        shell: bash
       - uses: actions/checkout@v2
       - name: Cache pulseaudio source
         uses: actions/cache@v2
@@ -19,7 +21,7 @@ jobs:
           cache-name: cache-pulseaudio-src
         with:
           path: ~/pulseaudio.src
-          key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
+          key: ${{ steps.os.outputs.image }}-build-${{ env.cache-name }}
       - run: scripts/install_pulseaudio_sources_apt.sh
 
   build:
@@ -40,17 +42,17 @@ jobs:
       CFLAGS: -Wall -Wextra -Werror
 
     steps:
-      # This is currently the only way to get a version into
-      # the cache tag name - see https://github.com/actions/cache/issues/543
-      - run: |
-          echo "OS_VERSION=`lsb_release -sr`" >> $GITHUB_ENV
+      - name: Get operating system name and version.
+        id: os
+        run: echo "::set-output name=image::$ImageOS"
+        shell: bash
       - name: Fetch pulseaudio sources
         uses: actions/cache@v2
         env:
           cache-name: cache-pulseaudio-src
         with:
           path: ~/pulseaudio.src
-          key: ${{ runner.os }}-${{ env.OS_VERSION }}-build-${{ env.cache-name }}
+          key: ${{ steps.os.outputs.image }}-build-${{ env.cache-name }}
       - uses: actions/checkout@v2
       - run: sudo apt-get update
       - run: sudo apt-get -yq install build-essential libpulse-dev
