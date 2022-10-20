@@ -98,6 +98,15 @@ if [ ! -d "$PULSE_DIR" ]; then
 
     sudo apt-get update
 
+    # For the CI build on 22.04, it was noted that an incompatible
+    # libunwind development package was installed.
+    if [ -f /usr/include/libunwind/libunwind.h ]; then
+        pkg=`dpkg -S /usr/include/libunwind/libunwind.h | sed -e 's/: .*//'`
+        if [ -n "$pkg" -a "$pkg" != libunwind-dev ]; then
+            echo "- Removing package $pkg"
+            sudo apt-get remove "$pkg"
+        fi
+    fi
     sudo apt-get build-dep -y pulseaudio
     # Install any missing dependencies for this software release
     case "$RELEASE" in
