@@ -81,6 +81,8 @@ struct userdata {
     pa_core *core;
     pa_module *module;
     pa_source *source;
+    pa_device_port *port;
+    pa_card *card;
 
     pa_thread *thread;
     pa_thread_mq thread_mq;
@@ -110,6 +112,75 @@ static const char* const valid_modargs[] = {
     "xrdp_pulse_source_socket",
     NULL
 };
+
+static pa_device_port *xrdp_create_port(struct userdata *u) {
+    pa_device_port_new_data data;
+    pa_device_port *port;
+
+    pa_device_port_new_data_init(&data);
+
+    pa_device_port_new_data_set_name(&data, "xrdp-input");
+    pa_device_port_new_data_set_description(&data, "xrdp input");
+    pa_device_port_new_data_set_direction(&data, PA_DIRECTION_INPUT);
+    pa_device_port_new_data_set_available(&data, PA_AVAILABLE_YES);
+#if defined(PA_CHECK_VERSION) && PA_CHECK_VERSION(14, 0, 0)
+    pa_device_port_new_data_set_type(&data, PA_DEVICE_PORT_TYPE_NETWORK);
+#endif
+
+    port = pa_device_port_new(u->core, &data, 0);
+
+    pa_device_port_new_data_done(&data);
+
+    if (port == NULL)
+    {
+        return NULL;
+    }
+
+    pa_device_port_ref(port);
+
+    return port;
+}
+
+static pa_card_profile *xrdp_create_profile() {
+    pa_card_profile *profile;
+
+    profile = pa_card_profile_new("input:xrdp", "xrdp audio input", 0);
+    profile->priority = 10;
+    profile->n_sinks = 0;
+    profile->n_sources = 1;
+    profile->max_sink_channels = 0;
+    profile->max_source_channels = 2;
+
+    return profile;
+}
+
+static pa_card *xrdp_create_card(pa_module *m, pa_device_port *port, pa_card_profile *profile) {
+    pa_card_new_data data;
+    pa_card *card;
+
+    pa_card_new_data_init(&data);
+    data.driver = __FILE__;
+
+    pa_card_new_data_set_name(&data, "xrdp.source");
+
+    pa_hashmap_put(data.ports, port->name, port);
+    pa_hashmap_put(data.profiles, profile->name, profile);
+
+    card = pa_card_new(m->core, &data);
+
+    pa_card_new_data_done(&data);
+
+    if (card == NULL)
+    {
+        return NULL;
+    }
+
+    pa_card_choose_initial_profile(card);
+
+    pa_card_put(card);
+
+    return card;
+}
 
 static int get_display_num_from_display(const char *display_text) ;
 
@@ -400,6 +471,8 @@ static void set_source_socket(pa_modargs *ma, struct userdata *u) {
 
 int pa__init(pa_module *m) {
     struct userdata *u = NULL;
+    pa_device_port *port;
+    pa_card_profile *profile;
     pa_sample_spec ss;
     pa_channel_map map;
     pa_modargs *ma = NULL;
@@ -454,10 +527,32 @@ int pa__init(pa_module *m) {
     pa_source_new_data_set_name(&data, pa_modargs_get_value(ma, "source_name", DEFAULT_SOURCE_NAME));
     pa_source_new_data_set_sample_spec(&data, &ss);
     pa_source_new_data_set_channel_map(&data, &map);
-    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_DESCRIPTION, pa_modargs_get_value(ma, "description", "xrdp source"));
-    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_DESCRIPTION, pa_modargs_get_value(ma, "description", "remote audio input"));
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_CLASS, "sound");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_FORM_FACTOR, "microphone");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_PRODUCT_NAME, "xrdp");
 
-    u->source = pa_source_new(m->core, &data, PA_SOURCE_LATENCY | PA_SOURCE_DYNAMIC_LATENCY);
+    port = xrdp_create_port(u);
+    if (port == NULL) {
+        pa_log("Failed to create port object");
+        goto fail;
+    }
+
+    profile = xrdp_create_profile();
+
+    pa_hashmap_put(port->profiles, profile->name, profile);
+
+    u->card = xrdp_create_card(m, port, profile);
+    if (u->card == NULL) {
+        pa_log("Failed to create card object");
+        goto fail;
+    }
+
+    data.card = u->card;
+    pa_hashmap_put(data.ports, port->name, port);
+
+    u->source = pa_source_new(m->core, &data, PA_SOURCE_LATENCY |
+        PA_SOURCE_DYNAMIC_LATENCY | PA_SOURCE_NETWORK | PA_SOURCE_HARDWARE);
     pa_source_new_data_done(&data);
 
     if (!u->source) {
@@ -528,15 +623,13 @@ void pa__done(pa_module*m) {
     if (u->source)
         pa_source_unlink(u->source);
 
+
     if (u->thread) {
         pa_asyncmsgq_send(u->thread_mq.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
         pa_thread_free(u->thread);
     }
 
     pa_thread_mq_done(&u->thread_mq);
-
-    if (u->source)
-        pa_source_unref(u->source);
 
     if (u->rtpoll)
         pa_rtpoll_free(u->rtpoll);
@@ -545,6 +638,11 @@ void pa__done(pa_module*m) {
     {
         close(u->fd);
         u->fd = -1;
+    }
+
+    if (u->card)
+    {
+        pa_card_free(u->card);
     }
 
     pa_xfree(u->source_socket);
