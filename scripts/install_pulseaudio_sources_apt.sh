@@ -115,6 +115,9 @@ if [ ! -d "$PULSE_DIR" ]; then
         Ubuntu-16.04)
             sudo apt-get install -y libjson-c-dev
             ;;
+        Kali-2022*)
+            sudo apt-get install -y doxygen
+            ;;
     esac
 
     cd "$(dirname $PULSE_DIR)"
