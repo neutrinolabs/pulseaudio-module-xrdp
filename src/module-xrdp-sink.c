@@ -82,6 +82,7 @@ PA_MODULE_USAGE(
         "rate=<sample rate> "
         "channels=<number of channels> "
         "channel_map=<channel map> "
+        "description=<description for the sink> "
         "xrdp_socket_path=<path to XRDP sockets> "
         "xrdp_pulse_sink_socket=<name of sink socket>");
 
@@ -101,6 +102,8 @@ struct userdata {
     pa_core *core;
     pa_module *module;
     pa_sink *sink;
+    pa_device_port *port;
+    pa_card *card;
 
     pa_thread *thread;
     pa_thread_mq thread_mq;
@@ -126,10 +129,80 @@ static const char* const valid_modargs[] = {
     "channel_map",
     "xrdp_socket_path",
     "xrdp_pulse_sink_socket",
+    "description",
     NULL
 };
 
 static int close_send(struct userdata *u);
+
+static pa_device_port *xrdp_create_port(struct userdata *u) {
+    pa_device_port_new_data data;
+    pa_device_port *port;
+
+    pa_device_port_new_data_init(&data);
+
+    pa_device_port_new_data_set_name(&data, "xrdp-output");
+    pa_device_port_new_data_set_description(&data, "xrdp output");
+    pa_device_port_new_data_set_direction(&data, PA_DIRECTION_OUTPUT);
+    pa_device_port_new_data_set_available(&data, PA_AVAILABLE_YES);
+#if defined(PA_CHECK_VERSION) && PA_CHECK_VERSION(14, 0, 0)
+    pa_device_port_new_data_set_type(&data, PA_DEVICE_PORT_TYPE_NETWORK);
+#endif
+
+    port = pa_device_port_new(u->core, &data, 0);
+
+    pa_device_port_new_data_done(&data);
+
+    if (port == NULL)
+    {
+        return NULL;
+    }
+
+    pa_device_port_ref(port);
+
+    return port;
+}
+
+static pa_card_profile *xrdp_create_profile() {
+    pa_card_profile *profile;
+
+    profile = pa_card_profile_new("output:xrdp", "xrdp audio output", 0);
+    profile->priority = 10;
+    profile->n_sinks = 1;
+    profile->n_sources = 0;
+    profile->max_sink_channels = 2;
+    profile->max_source_channels = 0;
+
+    return profile;
+}
+
+static pa_card *xrdp_create_card(pa_module *m, pa_device_port *port, pa_card_profile *profile) {
+    pa_card_new_data data;
+    pa_card *card;
+
+    pa_card_new_data_init(&data);
+    data.driver = __FILE__;
+
+    pa_card_new_data_set_name(&data, "xrdp.sink");
+
+    pa_hashmap_put(data.ports, port->name, port);
+    pa_hashmap_put(data.profiles, profile->name, profile);
+
+    card = pa_card_new(m->core, &data);
+
+    pa_card_new_data_done(&data);
+
+    if (card == NULL)
+    {
+        return NULL;
+    }
+
+    pa_card_choose_initial_profile(card);
+
+    pa_card_put(card);
+
+    return card;
+}
 
 static int sink_process_msg(pa_msgobject *o, int code, void *data,
                             int64_t offset, pa_memchunk *chunk) {
@@ -513,6 +586,8 @@ static void set_sink_socket(pa_modargs *ma, struct userdata *u) {
 
 int pa__init(pa_module*m) {
     struct userdata *u = NULL;
+    pa_device_port *port;
+    pa_card_profile *profile;
     pa_sample_spec ss;
     pa_channel_map map;
     pa_modargs *ma = NULL;
@@ -558,8 +633,11 @@ int pa__init(pa_module*m) {
           pa_modargs_get_value(ma, "sink_name", DEFAULT_SINK_NAME));
     pa_sink_new_data_set_sample_spec(&data, &ss);
     pa_sink_new_data_set_channel_map(&data, &map);
-    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_DESCRIPTION, "xrdp sink");
-    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_DESCRIPTION, pa_modargs_get_value(ma, "description", "remote audio output"));
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_CLASS, "sound");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_FORM_FACTOR, "computer");
+    pa_proplist_sets(data.proplist, PA_PROP_DEVICE_PRODUCT_NAME, "xrdp");
+
 
     if (pa_modargs_get_proplist(ma, "sink_properties", data.proplist,
                                 PA_UPDATE_REPLACE) < 0) {
@@ -567,9 +645,27 @@ int pa__init(pa_module*m) {
         pa_sink_new_data_done(&data);
         goto fail;
     }
+    port = xrdp_create_port(u);
+    if (port == NULL) {
+        pa_log("Failed to create port object");
+        goto fail;
+    }
+
+    profile = xrdp_create_profile();
+
+    pa_hashmap_put(port->profiles, profile->name, profile);
+
+    u->card = xrdp_create_card(m, port, profile);
+    if (u->card == NULL) {
+        pa_log("Failed to create card object");
+        goto fail;
+    }
+
+    data.card = u->card;
+    pa_hashmap_put(data.ports, port->name, port);
 
     u->sink = pa_sink_new(m->core, &data,
-                          PA_SINK_LATENCY | PA_SINK_DYNAMIC_LATENCY);
+                          PA_SINK_LATENCY | PA_SINK_DYNAMIC_LATENCY | PA_SINK_NETWORK | PA_SINK_HARDWARE);
     pa_sink_new_data_done(&data);
 
     if (!u->sink) {
@@ -664,6 +760,11 @@ void pa__done(pa_module*m) {
 
     if (u->rtpoll) {
         pa_rtpoll_free(u->rtpoll);
+    }
+
+    if (u->card)
+    {
+        pa_card_free(u->card);
     }
 
     if (u->fd >= 0)
