@@ -118,6 +118,14 @@ if [ ! -d "$PULSE_DIR" ]; then
         Kali-2022*)
             sudo apt-get install -y doxygen
             ;;
+        Debian-n/a)
+            # Debian testing build
+            case "$codename" in
+                bookworm)
+                    sudo apt-get install -y doxygen
+                    ;;
+            esac
+            ;;
     esac
 
     cd "$(dirname $PULSE_DIR)"
