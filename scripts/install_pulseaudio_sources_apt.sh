@@ -118,7 +118,7 @@ if [ ! -d "$PULSE_DIR" ]; then
         Kali-2022*)
             sudo apt-get install -y doxygen
             ;;
-        Debian-n/a)
+        Debian-12)
             # Debian testing build
             case "$codename" in
                 bookworm)
