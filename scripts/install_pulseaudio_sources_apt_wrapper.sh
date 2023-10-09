@@ -216,7 +216,7 @@ echo "- Creating schroot config file $schroot_conf"
 } | sudo tee $schroot_conf >/dev/null || exit $?
 
 # Copy some files to the build root
-for file in /etc/apt/sources.list; do
+for file in $(ls /etc/apt/*.list /etc/apt/sources.list.d/*.list 2> /dev/null); do
     echo "- Copying $file to the root"
     sudo install -m 0644 $file $BUILDROOT/$file || exit $?
 done

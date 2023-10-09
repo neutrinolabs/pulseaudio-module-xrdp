@@ -80,21 +80,24 @@ if [ ! -d "$PULSE_DIR" ]; then
     esac
 
     # Make sure sources are available
-    if ! grep -q '^ *deb-src' /etc/apt/sources.list; then
-        echo "- Adding source repositories" >&2
-        cp /etc/apt/sources.list /tmp/sources.list
-        while read type url suite rest; do
-            if [ "$type" = deb ]; then
-                case "$suite" in
-                    $codename | $codename-updates | $codename-security)
-                        echo "deb-src $url $suite $rest"
-                        ;;
-                esac
-            fi
-        done </tmp/sources.list \
-             | sudo tee -a /etc/apt/sources.list >/dev/null
-        rm /tmp/sources.list
-    fi
+    for srclst in $(ls /etc/apt/*.list /etc/apt/sources.list.d/*.list 2> /dev/null); do
+	if ! grep -q '^ *deb-src' $srclst; then
+            echo "- Adding source repositories" >&2
+            cp $srclst /tmp/sources.list
+            while read type url suite rest; do
+		if [ "$type" = deb ]; then
+                    case "$suite" in
+			$codename | $codename-updates | $codename-security)
+                            echo "deb-src $url $suite $rest"
+                            ;;
+                    esac
+		fi
+            done </tmp/sources.list \
+		| sudo tee -a $srclst >/dev/null
+            rm /tmp/sources.list
+	fi
+	cat $srclst | grep $codename | sudo tee $srclst
+    done
 
     sudo apt-get update
 
