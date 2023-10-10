@@ -96,10 +96,14 @@ if [ ! -d "$PULSE_DIR" ]; then
 		| sudo tee -a $srclst >/dev/null
             rm /tmp/sources.list
 	fi
+	# remove references to other distro's package sources; needed when running the wrapper in a
+	# derivative-distro (like Linux Mint 21.2 'victoria') with --suite option (--suite=jammy).
 	sudo sed -i "/$codename/!d" $srclst
-	cat $srclst >> /tmp/combined_sources.list
-	sudo rm $srclst
+	cat $srclst >> /tmp/combined_sources.list # prepare a combined sources.list file
+	sudo rm $srclst # remove the *.list file as we will use the combined .list file
     done
+    # remove duplicates from the combined source.list in order to prevent apt warnings/errors;
+    # this is useful in cases where the user has already configured source code repositories.
     cat /tmp/combined_sources.list | sort | uniq | sudo tee /etc/apt/sources.list > /dev/null
 
     sudo apt-get update
