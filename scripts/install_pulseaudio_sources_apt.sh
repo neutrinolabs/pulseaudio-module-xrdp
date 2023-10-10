@@ -80,7 +80,7 @@ if [ ! -d "$PULSE_DIR" ]; then
     esac
 
     # Make sure sources are available
-    for srclst in $(ls /etc/apt/*.list /etc/apt/sources.list.d/*.list 2> /dev/null); do
+    for srclst in $(find /etc/apt/ /etc/apt/sources.list.d -maxdepth 1 -type f -name '*.list'); do
 	if ! grep -q '^ *deb-src' $srclst; then
             echo "- Adding source repositories" >&2
             cp $srclst /tmp/sources.list
@@ -96,7 +96,7 @@ if [ ! -d "$PULSE_DIR" ]; then
 		| sudo tee -a $srclst >/dev/null
             rm /tmp/sources.list
 	fi
-	cat $srclst | grep $codename | sudo tee $srclst
+	sudo sed -i "/$codename/!d" $srclst
     done
 
     sudo apt-get update
