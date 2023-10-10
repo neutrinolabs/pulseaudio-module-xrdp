@@ -97,7 +97,10 @@ if [ ! -d "$PULSE_DIR" ]; then
             rm /tmp/sources.list
 	fi
 	sudo sed -i "/$codename/!d" $srclst
+	cat $srclst >> /tmp/combined_sources.list
+	sudo rm $srclst
     done
+    cat /tmp/combined_sources.list | sort | uniq | sudo tee /etc/apt/sources.list > /dev/null
 
     sudo apt-get update
 
