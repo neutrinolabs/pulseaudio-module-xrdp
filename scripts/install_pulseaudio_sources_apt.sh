@@ -79,32 +79,33 @@ if [ ! -d "$PULSE_DIR" ]; then
             ;;
     esac
 
-    # Make sure sources are available
-    for srclst in $(find /etc/apt/ /etc/apt/sources.list.d -maxdepth 1 -type f -name '*.list'); do
-	if ! grep -q '^ *deb-src' $srclst; then
-            echo "- Adding source repositories" >&2
-            cp $srclst /tmp/sources.list
-            while read type url suite rest; do
-		if [ "$type" = deb ]; then
-                    case "$suite" in
-			$codename | $codename-updates | $codename-security)
-                            echo "deb-src $url $suite $rest"
-                            ;;
-                    esac
-		fi
-            done </tmp/sources.list \
-		| sudo tee -a $srclst >/dev/null
-            rm /tmp/sources.list
-	fi
-	# remove references to other distro's package sources; needed when running the wrapper in a
-	# derivative-distro (like Linux Mint 21.2 'victoria') with --suite option (--suite=jammy).
-	sudo sed -i "/$codename/!d" $srclst
-	cat $srclst >> /tmp/combined_sources.list # prepare a combined sources.list file
-	sudo rm $srclst # remove the *.list file as we will use the combined .list file
-    done
-    # remove duplicates from the combined source.list in order to prevent apt warnings/errors;
-    # this is useful in cases where the user has already configured source code repositories.
-    cat /tmp/combined_sources.list | sort | uniq | sudo tee /etc/apt/sources.list > /dev/null
+    # Scan the source repositories. Add sources for all repositories
+    # in this suite.
+    # Ignore other suites. This is needed when running the wrapper in a
+    # derivative-distro (like Linux Mint 21.2 'victoria') with --suite
+    # option (--suite=jammy).
+    echo "- Adding source repositories" >&2
+    SRCLIST=$(find /etc/apt/ /etc/apt/sources.list.d -maxdepth 1 -type f -name '*.list')
+    for srclst in $SRCLIST; do
+        while read type url suite rest; do
+            case "$suite" in
+                $codename | $codename-updates | $codename-security)
+                    if [ "$type" = deb ]; then
+                        echo "deb $url $suite $rest"
+                        echo "deb-src $url $suite $rest"
+                    fi
+                    ;;
+            esac
+        done <$srclst
+    done >/tmp/combined_sources.list
+
+    sudo rm $SRCLIST ;# Remove source respositories
+
+    # remove duplicates from the combined source.list in order to prevent
+    # apt warnings/errors; this is useful in cases where the user has
+    # already configured source code repositories.
+    sort -u < /tmp/combined_sources.list | \
+        sudo tee /etc/apt/sources.list > /dev/null
 
     sudo apt-get update
 
