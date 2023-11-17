@@ -114,6 +114,7 @@ RunWrappedScript()
     schroot="schroot -c pa-build-$USER -d /build"
 
     # Install extra dependencies
+    $schroot -u root -- apt-get update
     $schroot -u root -- apt-get install -y $WRAPPED_SCRIPT_DEPS
 
     # Allow normal user to sudo without a password
