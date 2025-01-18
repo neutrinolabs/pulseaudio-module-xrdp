@@ -95,7 +95,7 @@ if [ ! -d "$PULSE_DIR" ]; then
         for srclst in $SRCLIST; do
             while read type url suite rest; do
                 case "$suite" in
-                    $codename | $codename-updates | $codename-security)
+                    $codename | $codename-updates | $codename-security | sid | trixie)
                         if [ "$type" = deb ]; then
                             echo "deb $url $suite $rest"
                             echo "deb-src $url $suite $rest"
@@ -116,7 +116,7 @@ if [ ! -d "$PULSE_DIR" ]; then
 
     # Cater for DEB822 .sources files. These can appear alongside the
     # older format.
-    for src in $(find /etc/apt/sources.list.d -maxdepth 1 -type f -name '*.sources'); do
+    for src in $(find /etc/apt/sources.list.d -maxdepth 1 -type f -name '*.sources' -o -name '*.list'); do
         # If we can find a match for the codename in the file, enable
         # sources for all elements of the file. We assume that different
         # codenames will be assigned to different files
@@ -149,11 +149,7 @@ if [ ! -d "$PULSE_DIR" ]; then
             ;;
         Debian-12)
             # Debian testing build
-            case "$codename" in
-                bookworm)
-                    sudo apt-get install -y doxygen
-                    ;;
-            esac
+            sudo apt-get install -y doxygen
             ;;
     esac
 

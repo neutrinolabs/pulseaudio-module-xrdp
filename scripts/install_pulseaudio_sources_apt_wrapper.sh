@@ -234,7 +234,15 @@ done
 
 for file in $(find /etc/apt/trusted.gpg.d/ \
     -maxdepth 1 \
-    -type f -name '*.gpg' ); do
+    -type f -name '*.gpg' -o -name '*.asc' ); do
+    if [ ! -f "$BUILDROOT/$file" ]; then
+        echo "- Copying $file to the root"
+        sudo install -Dm 0644 $file $BUILDROOT/$file || exit $?
+    fi
+done
+for file in $(find /etc/apt/keyrings/ \
+    -maxdepth 1 \
+    -type f -name '*.gpg' -o -name '*.asc' ); do
     if [ ! -f "$BUILDROOT/$file" ]; then
         echo "- Copying $file to the root"
         sudo install -Dm 0644 $file $BUILDROOT/$file || exit $?
