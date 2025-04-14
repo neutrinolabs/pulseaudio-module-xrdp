@@ -98,6 +98,25 @@ PA_MODULE_USAGE(
 #undef USE_SET_STATE_IN_IO_THREAD_CB
 #endif
 
+/*
+ * ** THIS IS A HACK **
+ *
+ * we need to access (struct set_state_data *)->state
+ * from our code, but the struct is currently private to pulsecore/sink.c
+ * The struct was introduced for 11.99.1, and hasn't changed since. Given
+ * the late development status of pulseaudio now (April '25), this is
+ * unlikely to change again */
+
+#if defined(PA_CHECK_VERSION) && PA_CHECK_VERSION(11, 99, 1)
+struct set_state_data { /* Copied from pulsecore/sink.c */
+    pa_sink_state_t state;
+    pa_suspend_cause_t suspend_cause;
+};
+#define GET_STATE_FROM_SET_STATE_DATA
+#else
+#undef GET_STATE_FROM_SET_STATE_DATA
+#endif
+
 struct userdata {
     pa_core *core;
     pa_module *module;
@@ -204,12 +223,42 @@ static pa_card *xrdp_create_card(pa_module *m, pa_device_port *port, pa_card_pro
     return card;
 }
 
+#if !defined(PA_CHECK_VERSION) || !PA_CHECK_VERSION(11, 99, 1)
+/**
+ * Returns a string representation of the sink state
+ *
+ * Later versions of PA provide this function in pulsecore/sink.h
+ *
+ * @param state Sink state
+ * @return string representation of state
+ */
+static const char *
+pa_sink_state_to_string(pa_sink_state_t state)
+{
+    switch (state)
+    {
+        case PA_SINK_INIT:
+            return "INIT";
+        case PA_SINK_RUNNING:
+            return "RUNNING";
+        case PA_SINK_SUSPENDED:
+            return "SUSPENDED";
+        case PA_SINK_IDLE:
+            return "IDLE";
+        case PA_SINK_UNLINKED:
+            return "UNLINKED";
+    }
+    pa_assert_not_reached();
+}
+#endif
+
 static int sink_process_msg(pa_msgobject *o, int code, void *data,
                             int64_t offset, pa_memchunk *chunk) {
 
     struct userdata *u = PA_SINK(o)->userdata;
     pa_usec_t now;
     long lat;
+    pa_sink_state_t sink_state;
 
     switch (code) {
 
@@ -234,14 +283,33 @@ static int sink_process_msg(pa_msgobject *o, int code, void *data,
             break;
 
         case PA_SINK_MESSAGE_SET_STATE:
-            pa_log_debug("sink_process_msg: PA_SINK_MESSAGE_SET_STATE");
-            if (PA_PTR_TO_UINT(data) == PA_SINK_RUNNING) /* 0 */ {
-                pa_log("sink_process_msg: running");
+#ifdef GET_STATE_FROM_SET_STATE_DATA
+            sink_state = ((const struct set_state_data *)data)->state;
+#else
+            sink_state = PA_PTR_TO_UINT(data);
+#endif
+            pa_log("sink_process_msg: PA_SINK_MESSAGE_SET_STATE [%s]",
+                   pa_sink_state_to_string(sink_state));
+            switch (sink_state)
+            {
+                case PA_SINK_INVALID_STATE:
+                case PA_SINK_INIT:
+                    break;
 
-                u->timestamp = pa_rtclock_now();
-            } else {
-                pa_log("sink_process_msg: not running");
-                close_send(u);
+                case PA_SINK_RUNNING:
+                    pa_log("sink_process_msg: running");
+                    u->timestamp = pa_rtclock_now();
+                    break;
+
+                case PA_SINK_IDLE:
+                case PA_SINK_SUSPENDED:
+                case PA_SINK_UNLINKED:
+                    pa_log("sink_process_msg: not running");
+                    close_send(u);
+                    break;
+
+                default:
+                    pa_assert_not_reached();
             }
             break;
 
