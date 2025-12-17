@@ -167,6 +167,12 @@ while [ -n "$1" ]; do
 done
 
 # Start with a few sanity checks
+if [ $(id -u) -eq 0 ]; then
+    echo "** Do not run this script as root" >&2
+    echo "   Use a normal user account with sudo privileges" >&2
+    exit 0
+fi
+
 if [ -d $PULSE_DIR ]; then
     echo "** Target directory $PULSE_DIR already exists" >&2
     exit 0
