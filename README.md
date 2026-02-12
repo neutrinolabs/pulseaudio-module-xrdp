@@ -33,7 +33,7 @@ for your platform:-
 https://github.com/neutrinolabs/pulseaudio-module-xrdp/wiki
 
 # Install
-One the modules have been built, `sudo make install` should do the following:-
+Once the modules have been built, `sudo make install` should do the following:-
 - Install the modules to the correct directory
 - Install a script `load_pa_modules.sh` to load the modules when a
   session is started.
