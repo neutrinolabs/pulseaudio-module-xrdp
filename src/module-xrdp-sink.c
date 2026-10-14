@@ -680,8 +680,12 @@ int pa__init(pa_module*m) {
         goto fail;
     }
 
-    ss = m->core->default_sample_spec;
-    map = m->core->default_channel_map;
+    /* xrdp-chansrv takes 16 bit stereo at 44100 Hz: the socket carries
+       no format, so don't follow the server's default sample spec */
+    ss.format = PA_SAMPLE_S16LE;
+    ss.rate = 44100;
+    ss.channels = 2;
+    pa_channel_map_init_stereo(&map);
     if (pa_modargs_get_sample_spec_and_channel_map(ma, &ss, &map,
                          PA_CHANNEL_MAP_DEFAULT) < 0) {
         pa_log("Invalid sample format specification or channel map");
